@@ -1,0 +1,59 @@
+HOW TO RUN TEAMS CHAT (WITH VIDEO CALLS) ON ANOTHER PC
+======================================================
+
+PREREQUISITES
+-------------
+1. Python installed (3.8 or higher).
+2. Internet connection (for installing packages).
+
+STEP 1: COPY THE PROJECT
+------------------------
+Copy the entire "teams_chat" folder to the new PC.
+
+STEP 2: INSTALL DEPENDENCIES
+----------------------------
+Open a terminal (Command Prompt or PowerShell) in the project folder and run:
+
+    pip install -r requirements.txt
+    pip install django-sslserver daphne channels channels-redis
+
+STEP 3: GENERATE SSL CERTIFICATES (One Time Only)
+-------------------------------------------------
+Run this script to create the security keys needed for video calls:
+
+    python generate_certs.py
+
+(This will create 'cert.pem' and 'key.pem' files)
+
+STEP 4: START THE SERVER
+------------------------
+You have two options to start the server.
+
+OPTION A: The Easy Way (Batch Script)
+-------------------------------------
+Double-click the file named:
+    run_secure_server.bat
+
+OPTION B: The Manual Way (Terminal)
+-----------------------------------
+Run this command in the terminal:
+    python manage.py runsslserver 0.0.0.0:8001 --certificate cert.pem --key key.pem
+
+STEP 5: CONNECT FROM OTHER DEVICES
+----------------------------------
+1. Find the IP address of the PC running the server (run `ipconfig` in terminal).
+   Let's say it is: 192.168.1.5
+
+2. On your phone or other laptop, open Chrome/Safari and go to:
+   https://192.168.1.5:8001/chat/
+
+   IMPORTANT:
+   - You MUST use "https://"
+   - You MUST accept the "Not Secure" warning (Advanced -> Proceed).
+   - Allow Camera/Microphone permissions when asked.
+
+TROUBLESHOOTING
+---------------
+- If the site doesn't load: Check if Windows Firewall is blocking Python. Allow it.
+- If video is black: Ensure both devices are on the same Wi-Fi network.
+- If "Camera Blocked": Make sure you are using HTTPS link, not HTTP.
