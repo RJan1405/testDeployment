@@ -10,3 +10,5 @@ whitenoise
 psycopg2-binary
 dj-database-url
 gunicorn
+Pillow
+cryptography>=45.0
