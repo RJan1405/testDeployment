@@ -116,7 +116,7 @@ class Message(models.Model):
         try:
             # import locally to avoid circular import on startup
             from .utils.encryption import decrypt_message
-            return decrypt_message(self.encrypted_text)
+            return decrypt_message(bytes(self.encrypted_text))
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
