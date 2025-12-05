@@ -11,4 +11,6 @@ psycopg2-binary
 dj-database-url
 gunicorn
 Pillow
-cryptography>=45.0
+# Pin conflicting versions
+cryptography==43.0.3
+pyopenssl==24.0.0
