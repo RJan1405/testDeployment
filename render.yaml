@@ -2,6 +2,7 @@ services:
   # The Main Web Service (Django + Daphne)
   - type: web
     name: testDeployment
+    autoDeploy: true
     env: python
     buildCommand: "./build.sh"
     startCommand: "daphne -b 0.0.0.0 -p $PORT teams_chat.asgi:application"
