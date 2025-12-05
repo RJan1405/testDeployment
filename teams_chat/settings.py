@@ -3,14 +3,23 @@
 import os
 from pathlib import Path
 from decouple import config
+import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-dev-key-change-in-production')
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG =os.environ.get("DEBUG","False").lower() == "true"
 ALLOWED_HOSTS = ['*']
-if DEBUG and '*' not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append('*')
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
+# CSRF Settings for Render
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.onrender.com',
+]
+if RENDER_EXTERNAL_HOSTNAME:
+    CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_EXTERNAL_HOSTNAME}')
 FERNET_KEY = "Cl6ELr31JUC0z8zmfjTXOKS9dmYKQTx7esJ5Zv065MM="
 
 # -------------------------------
@@ -82,12 +91,20 @@ ASGI_APPLICATION = 'teams_chat.asgi.application'
 # -------------------------------
 # Database (SQLite)
 # -------------------------------
+# Database
+# https://docs.djangoproject.com/en/4.0/ref/settings/#databases
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# Render PostgreSQL database (overrides sqlite if DATABASE_URL is present)
+database_url = os.environ.get('DATABASE_URL')
+if database_url:
+    DATABASES['default'] = dj_database_url.parse(database_url, conn_max_age=600)
 
 # -------------------------------
 # Password Validation
@@ -167,16 +184,26 @@ if DEBUG:
         }
     }
 else:
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels_redis.core.RedisChannelLayer',
-            'CONFIG': {
-                'hosts': [('127.0.0.1', 6379)],
-                'capacity': 1500,
-                'expiry': 10,
+    # Production (Render)
+    redis_url = os.environ.get('REDIS_URL')
+    if redis_url:
+        CHANNEL_LAYERS = {
+            'default': {
+                'BACKEND': 'channels_redis.core.RedisChannelLayer',
+                'CONFIG': {
+                    'hosts': [redis_url],
+                    'capacity': 1500,
+                    'expiry': 10,
+                },
             },
-        },
-    }
+        }
+    else:
+        # Fallback to In-Memory if no Redis (works for single instance)
+        CHANNEL_LAYERS = {
+            'default': {
+                'BACKEND': 'channels.layers.InMemoryChannelLayer',
+            }
+        }
 
 # -------------------------------
 # Logging

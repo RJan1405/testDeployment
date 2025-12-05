@@ -1,0 +1,12 @@
+Django>=4.0,<5.0
+channels>=4.0
+daphne>=4.0
+channels_redis>=4.0
+django-decouple
+django-sslserver
+djangorestframework
+django-cors-headers
+whitenoise
+psycopg2-binary
+dj-database-url
+gunicorn
