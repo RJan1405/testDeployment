@@ -114,26 +114,29 @@ async function loadRecentChats() {
 
 async function loadChatMetadata(type, id) {
   try {
-    if (type !== 'user') return;
-
-    const key = `user_${id}`;
+    const key = `${type}_${id}`;
     if (chatMetadata.has(key)) return; // Already loaded
 
-    // Fetch all messages to get files count and metadata
-    const url = `${API_BASE}/messages/user/${id}/`;
+    let url = '';
+    if (type === 'user') {
+      url = `${API_BASE}/messages/user/${id}/`;
+    } else {
+      url = `${API_BASE}/messages/project/${id}/`;
+    }
+
     const res = await fetch(url, { headers: defaultHeaders() });
     if (!res.ok) throw new Error(`Status ${res.status}`);
     const messages = await res.json();
 
     let filesCount = 0;
     let lastActivityTime = null;
-    const files = []; // ✅ NEW: Store all files
+    let lastMessageText = '';
+    const files = [];
 
     if (Array.isArray(messages)) {
       messages.forEach(msg => {
         if (msg.file_url) {
           filesCount++;
-          // ✅ NEW: Add file details
           files.push({
             name: msg.file_name || extractFileNameFromUrl(msg.file_url),
             url: msg.file_url,
@@ -144,6 +147,10 @@ async function loadChatMetadata(type, id) {
         }
         if (msg.timestamp && (!lastActivityTime || new Date(msg.timestamp) > new Date(lastActivityTime))) {
           lastActivityTime = msg.timestamp;
+          // Clean text for preview
+          if (msg.text === '[PROJECT_MEETING_INVITE]') lastMessageText = '🎥 Meeting Started';
+          else if (msg.text === '[PROJECT_MEETING_ENDED]') lastMessageText = '🏁 Meeting Ended';
+          else lastMessageText = msg.text || (msg.file_url ? '📎 Attachment' : '');
         }
       });
     }
@@ -151,11 +158,24 @@ async function loadChatMetadata(type, id) {
     chatMetadata.set(key, {
       filesCount,
       lastActivity: lastActivityTime,
+      lastMessage: lastMessageText,
       messageCount: messages.length,
-      files: files // ✅ NEW: Store files array
+      files: files
     });
 
-    console.log(`✅ Chat metadata loaded for user ${id}:`, chatMetadata.get(key));
+    console.log(`✅ Chat metadata loaded for ${type} ${id}:`, chatMetadata.get(key));
+
+    // Trigger re-render if needed
+    if (type === 'project') {
+      const pList = document.getElementById('projects-list');
+      // We can't easily find the specific element without ID, but we can re-render if we want, 
+      // or just update if we had IDs. For now, calling renderProjects again might be heavy, 
+      // so we just let the next render pick it up, or rely on initial load.
+      // Better: update specific item if possible.
+      const previewEl = document.getElementById(`project-preview-${id}`);
+      if (previewEl) previewEl.textContent = lastMessageText || 'No messages';
+    }
+
   } catch (err) {
     console.error('❌ Error loading chat metadata:', err);
   }
@@ -222,6 +242,12 @@ async function loadProjects() {
     const res = await fetch(url, { headers: defaultHeaders() });
     if (!res.ok) throw new Error(`Status ${res.status}`);
     const projects = await res.json();
+
+    // Load metadata for projects
+    for (const p of projects) {
+      await loadChatMetadata('project', p.id);
+    }
+
     renderProjects(projects);
   } catch (err) {
     console.error('❌ Error loading projects:', err);
@@ -259,7 +285,10 @@ function createProjectItem(project) {
 
   const preview = document.createElement('div');
   preview.className = 'chat-preview';
-  preview.textContent = `${project.members?.length || 0} members`;
+  preview.id = `project-preview-${project.id}`;
+
+  const meta = chatMetadata.get(`project_${project.id}`);
+  preview.textContent = meta?.lastMessage || `${project.members?.length || 0} members`;
 
   info.appendChild(name);
   info.appendChild(preview);
@@ -740,9 +769,15 @@ function extractFileNameFromUrl(url) {
 function scrollToBottom() {
   const messagesContainer = document.getElementById('messages-container');
   if (messagesContainer) {
+    // Immediate scroll
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    // Delayed scroll to handle image/layout loading
     setTimeout(() => {
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }, 50);
+    }, 100);
+    setTimeout(() => {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }, 300);
   }
 }
 
@@ -2465,6 +2500,26 @@ function setupCallButtons() {
 
   const mExpand = document.getElementById('meeting-expand-btn');
   if (mExpand) mExpand.onclick = () => toggleMeetingSize();
+
+  const mReact = document.getElementById('meeting-reaction-btn');
+  const mHand = document.getElementById('meeting-hand-btn');
+
+  if (mReact) {
+    mReact.onclick = (e) => {
+      e.stopPropagation();
+      const popup = document.getElementById('reactions-popup');
+      if (popup) popup.classList.toggle('hidden');
+    };
+    // Close popup when clicking outside
+    document.addEventListener('click', (e) => {
+      const popup = document.getElementById('reactions-popup');
+      if (popup && !popup.contains(e.target) && e.target !== mReact) {
+        popup.classList.add('hidden');
+      }
+    });
+  }
+
+  if (mHand) mHand.onclick = toggleRaiseHand;
 }
 
 /* ============================================================
@@ -2475,6 +2530,7 @@ let projectPeers = {}; // { userId: RTCPeerConnection }
 let projectLocalStream = null;
 let isScreenSharing = false;
 let originalVideoTrack = null;
+let isHandRaised = false;
 
 async function openProjectMeeting() {
   if (currentChatType !== 'project' || !currentChatId) return;
@@ -2575,8 +2631,11 @@ function handleProjectRTC(data) {
     handleProjectOffer(fromId, data.sdp);
   } else if (action === 'answer') {
     if (pc) pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-  } else if (action === 'candidate') {
     if (pc && data.candidate) pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+  } else if (action === 'raise_hand') {
+    updateRemoteHandStatus(fromId, data.raised);
+  } else if (action === 'reaction') {
+    showFlyingReaction(fromId, data.content);
   }
 }
 
@@ -3053,6 +3112,89 @@ function inviteToMeeting() {
 function toggleMeetingSize() {
   const overlay = document.getElementById('meeting-overlay');
   if (overlay) overlay.classList.toggle('minimized');
+}
+
+/* ============================================================
+   MEETING REACTIONS & RAISE HAND
+   ============================================================ */
+
+function toggleRaiseHand() {
+  isHandRaised = !isHandRaised;
+
+  // Update local UI
+  const btn = document.getElementById('meeting-hand-btn');
+  if (btn) {
+    if (isHandRaised) {
+      btn.style.background = '#eab308'; // yellow
+      btn.style.color = '#fff';
+    } else {
+      btn.style.background = '';
+      btn.style.color = '';
+    }
+  }
+
+  // Update local badge
+  updateRemoteHandStatus(currentUserId, isHandRaised);
+
+  // Broadcast to peers
+  sendProjectRTC({
+    action: 'raise_hand',
+    raised: isHandRaised
+  });
+}
+
+function updateRemoteHandStatus(userId, raised) {
+  const wrap = document.getElementById(`video-wrapper-${userId}`);
+  if (!wrap) return;
+
+  let badge = wrap.querySelector('.video-hand-badge');
+  if (raised) {
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'video-hand-badge';
+      badge.textContent = '✋';
+      wrap.appendChild(badge);
+    }
+  } else {
+    if (badge) badge.remove();
+  }
+}
+
+function sendMeetingReaction(emoji) {
+  // Hide popup
+  const popup = document.getElementById('reactions-popup');
+  if (popup) popup.classList.add('hidden');
+
+  // Show locally
+  showFlyingReaction(currentUserId, emoji);
+
+  // Broadcast
+  sendProjectRTC({
+    action: 'reaction',
+    content: emoji
+  });
+}
+
+function showFlyingReaction(userId, emoji) {
+  const overlay = document.getElementById('meeting-container'); // use container to constrain to video area? No, overlay is better for global center
+  if (!overlay) return;
+
+  const el = document.createElement('div');
+  el.className = 'flying-reaction';
+  el.textContent = emoji;
+
+  // If we know who sent it, maybe position it over their video? 
+  // For now, let's random position slightly to make it fun or center it. 
+  // The CSS default was center bottom. Let's add slight random X offset.
+  const randomX = (Math.random() - 0.5) * 50; // -25% to +25%
+  el.style.transform = `translateX(calc(-50% + ${randomX}px))`;
+
+  // Append to a wrapper that sits on top of video grid
+  // We'll just append to meeting-container but ensure z-index is high
+  overlay.appendChild(el);
+
+  // Remove after animation
+  setTimeout(() => el.remove(), 2000);
 }
 
 

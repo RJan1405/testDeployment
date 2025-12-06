@@ -144,7 +144,7 @@ class MessageViewSet(viewsets.ModelViewSet):
         messages = Message.objects.filter(
             Q(sender=request.user, receiver=other_user) |
             Q(sender=other_user, receiver=request.user)
-        ).order_by('timestamp')
+        ).order_by('timestamp', 'id')
 
         # Mark as read
         Message.objects.filter(
@@ -165,7 +165,7 @@ class MessageViewSet(viewsets.ModelViewSet):
         if request.user not in project.members.all():
             return Response({'error': 'Not a member of this project'}, status=status.HTTP_403_FORBIDDEN)
 
-        messages = project.messages.all().order_by('timestamp')
+        messages = project.messages.all().order_by('timestamp', 'id')
 
         # Mark as read
         messages.filter(is_read=False).exclude(sender=request.user).update(is_read=True)
@@ -189,7 +189,7 @@ class MessageViewSet(viewsets.ModelViewSet):
         # Get all messages involving this user, ordered by most recent
         recent_messages = Message.objects.filter(
             Q(sender=request.user) | Q(receiver=request.user)
-        ).order_by('-timestamp')
+        ).order_by('-timestamp', '-id')
 
         # Group by conversation
         conversations_dict = {}

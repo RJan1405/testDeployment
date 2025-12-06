@@ -1616,9 +1616,70 @@
   }
 
   /* Minimized state optimization */
-  #meeting-overlay.minimized .meet-btn-more,
   #meeting-overlay.minimized #meeting-timer {
     display: none;
+  }
+
+  /* Utility */
+  .hidden {
+    display: none !important;
+  }
+
+  .reaction-opt {
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: transform 0.2s;
+  }
+
+  .reaction-opt:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(1.2);
+  }
+
+  .video-hand-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: 24px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+
+  .flying-reaction {
+    position: absolute;
+    bottom: 20%;
+    left: 50%;
+    font-size: 40px;
+    pointer-events: none;
+    animation: flyUp 2s ease-out forwards;
+    z-index: 100;
+  }
+
+  @keyframes flyUp {
+    0% {
+      transform: translateX(-50%) translateY(0) scale(0.5);
+      opacity: 0;
+    }
+
+    20% {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-20px) scale(1.2);
+    }
+
+    100% {
+      transform: translateX(-50%) translateY(-150px) scale(1);
+      opacity: 0;
+    }
   }
 </style>
 {% endblock %}
@@ -1796,9 +1857,17 @@
       </div>
 
       <!-- Center: Actions -->
-      <div style="display:flex; gap:12px">
-        <button class="meet-btn" title="Reactions">☺</button>
-        <button class="meet-btn" title="Raise Hand">✋</button>
+      <div style="display:flex; gap:12px; position:relative">
+        <button id="meeting-reaction-btn" class="meet-btn" title="Reactions">☺</button>
+        <div id="reactions-popup" class="hidden"
+          style="position:absolute; bottom:60px; left:0; background:#374151; padding:8px; border-radius:8px; display:flex; gap:8px; box-shadow:0 4px 12px rgba(0,0,0,0.3); z-index:100">
+          <button class="reaction-opt" onclick="sendMeetingReaction('👍')">👍</button>
+          <button class="reaction-opt" onclick="sendMeetingReaction('❤️')">❤️</button>
+          <button class="reaction-opt" onclick="sendMeetingReaction('😂')">😂</button>
+          <button class="reaction-opt" onclick="sendMeetingReaction('😮')">😮</button>
+          <button class="reaction-opt" onclick="sendMeetingReaction('👏')">👏</button>
+        </div>
+        <button id="meeting-hand-btn" class="meet-btn" title="Raise Hand">✋</button>
         <button id="meeting-share-btn" class="meet-btn" title="Share Screen">⬆</button>
         <button id="meeting-invite-btn" class="meet-btn" title="Add People">👤+</button>
         <button class="meet-btn" title="Chat">💬</button>
