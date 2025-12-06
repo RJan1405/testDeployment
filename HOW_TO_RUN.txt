@@ -37,7 +37,7 @@ Double-click the file named:
 OPTION B: The Manual Way (Terminal)
 -----------------------------------
 Run this command in the terminal:
-    python manage.py runsslserver 0.0.0.0:8001 --certificate cert.pem --key key.pem
+    python -m daphne -e ssl:8001:privateKey=key.pem:certKey=cert.pem teams_chat.asgi:application
 
 STEP 5: CONNECT FROM OTHER DEVICES
 ----------------------------------
@@ -57,3 +57,6 @@ TROUBLESHOOTING
 - If the site doesn't load: Check if Windows Firewall is blocking Python. Allow it.
 - If video is black: Ensure both devices are on the same Wi-Fi network.
 - If "Camera Blocked": Make sure you are using HTTPS link, not HTTP.
+
+
+#python -m daphne -e ssl:8001:privateKey=key.pem:certKey=cert.pem teams_chat.asgi:application

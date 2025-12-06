@@ -336,12 +336,17 @@ async function loadChatWindow(type, id) {
     const statusText = isOnline ? '● Online' : '● Offline';
 
     const mediaToggleBtn = '<button id="media-toggle-header-btn" title="Media" style="margin-left:6px;border:none;background:#e5e7eb;color:#111827;border-radius:6px;padding:6px 8px;cursor:pointer">🖼️</button>';
-    const callBtns = (type === 'user') ?
-      `<div class="call-buttons">
-         <button id="voice-call-btn" class="call-btn" title="Voice call">📞</button>
-         <button id="video-call-btn" class="call-btn" title="Video call">🎥</button>
-       </div>`
-      : '';
+    let callBtns = '';
+    if (type === 'user') {
+      callBtns = '';
+    } else {
+      callBtns = `
+        <div class="call-buttons">
+          <button id="project-meeting-btn" style="background:#2563eb; color:white; border:none; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 1px 3px rgba(0,0,0,0.1); transition: all 0.2s">
+            <span>🎥</span> <span>Join Meeting</span>
+          </button>
+        </div>`;
+    }
 
     chatWindow.innerHTML = `
       <div class="chat-header">
@@ -1929,7 +1934,11 @@ function handleWebSocketMessage(data) {
   }
 
   if (data.type === 'rtc') {
-    handleRTCMessage(data);
+    if (currentChatType === 'project') {
+      handleProjectRTC(data);
+    } else {
+      handleRTCMessage(data);
+    }
     return;
   }
 
@@ -2354,6 +2363,10 @@ function setupCallButtons() {
   const aBtn = document.getElementById('voice-call-btn');
   if (vBtn) vBtn.onclick = () => startOutgoingCall('video');
   if (aBtn) aBtn.onclick = () => startOutgoingCall('audio');
+
+  const meetBtn = document.getElementById('project-meeting-btn');
+  if (meetBtn) meetBtn.onclick = openProjectMeeting;
+
   const endBtn = document.getElementById('call-end-btn');
   const acceptBtn = document.getElementById('call-accept-btn');
   const rejectBtn = document.getElementById('call-reject-btn');
@@ -2367,6 +2380,227 @@ function setupCallButtons() {
   if (micBtn) micBtn.onclick = () => { if (rtcLocalStream) rtcLocalStream.getAudioTracks().forEach(t => t.enabled = !t.enabled); };
   if (camBtn) camBtn.onclick = () => { if (rtcLocalStream) rtcLocalStream.getVideoTracks().forEach(t => t.enabled = !t.enabled); };
 }
+
+/* ============================================================
+   PROJECT MEETINGS (MESH P2P)
+   ============================================================ */
+
+let projectPeers = {}; // { userId: RTCPeerConnection }
+let projectLocalStream = null;
+
+async function openProjectMeeting() {
+  if (currentChatType !== 'project' || !currentChatId) return;
+
+  const overlay = document.getElementById('meeting-overlay');
+  const container = document.getElementById('meeting-container');
+  if (!overlay || !container) return;
+
+  container.innerHTML = '';
+
+  // Create grid layout
+  container.style.display = 'grid';
+  container.style.gridTemplateColumns = 'repeat(auto-fit, minmax(320px, 1fr))';
+  container.style.gap = '10px';
+  container.style.padding = '10px';
+  container.style.alignContent = 'center';
+
+  // 1. Get Local Stream
+  try {
+    projectLocalStream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: { width: { ideal: 640 }, height: { ideal: 360 } }
+    });
+  } catch (e) {
+    alert("Could not access camera/mic: " + e.message);
+    return;
+  }
+
+  // 2. Add Local Video to Grid
+  addVideoTile(currentUserId, projectLocalStream, true);
+
+  // 3. Show Overlay
+  overlay.classList.remove('hidden');
+
+  // 4. broadcast JOIN request to all group members
+  sendProjectRTC({ action: 'join_request' });
+}
+
+window.closeMeetingOverlay = function () {
+  const overlay = document.getElementById('meeting-overlay');
+  const container = document.getElementById('meeting-container');
+  if (overlay) overlay.classList.add('hidden');
+
+  // Cleanup Local
+  if (projectLocalStream) {
+    projectLocalStream.getTracks().forEach(t => t.stop());
+    projectLocalStream = null;
+  }
+
+  // Cleanup Peers
+  Object.values(projectPeers).forEach(pc => pc.close());
+  projectPeers = {};
+
+  if (container) container.innerHTML = '';
+
+  // Notify others (optional, mesh usually relies on connection failure or explicit leave)
+};
+
+// Handle incoming RTC signals for Project
+function handleProjectRTC(data) {
+  const fromId = Number(data.from_id);
+  if (fromId === Number(currentUserId)) return;
+
+  // If I am not in the meeting (overlay hidden), ignore signals
+  const overlay = document.getElementById('meeting-overlay');
+  if (!overlay || overlay.classList.contains('hidden')) return;
+
+  const action = data.action;
+
+  // New user joined: Create PC, Send Offer
+  if (action === 'join_request') {
+    initiateProjectCall(fromId);
+    return;
+  }
+
+  // Signals coming for me?
+  const toId = Number(data.to_id);
+  if (toId && toId !== Number(currentUserId)) return;
+
+  const pc = projectPeers[fromId];
+
+  if (action === 'offer') {
+    handleProjectOffer(fromId, data.sdp);
+  } else if (action === 'answer') {
+    if (pc) pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+  } else if (action === 'candidate') {
+    if (pc && data.candidate) pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+  }
+}
+
+async function initiateProjectCall(targetId) {
+  if (projectPeers[targetId]) return; // Already connected
+
+  const pc = createPeerConnection(targetId);
+  projectPeers[targetId] = pc;
+
+  // Add local tracks
+  projectLocalStream.getTracks().forEach(track => pc.addTrack(track, projectLocalStream));
+
+  // Create Offer
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  sendProjectRTC({
+    action: 'offer',
+    to_id: targetId,
+    sdp: offer
+  });
+}
+
+async function handleProjectOffer(fromId, sdp) {
+  let pc = projectPeers[fromId];
+  if (!pc) {
+    pc = createPeerConnection(fromId);
+    projectPeers[fromId] = pc;
+    // Add local tracks
+    if (projectLocalStream) {
+      projectLocalStream.getTracks().forEach(track => pc.addTrack(track, projectLocalStream));
+    }
+  }
+
+  await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  sendProjectRTC({
+    action: 'answer',
+    to_id: fromId,
+    sdp: answer
+  });
+}
+
+function createPeerConnection(remoteId) {
+  const pc = new RTCPeerConnection(getRtcConfig());
+
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      sendProjectRTC({
+        action: 'candidate',
+        to_id: remoteId,
+        candidate: event.candidate
+      });
+    }
+  };
+
+  pc.ontrack = (event) => {
+    // Check if video element already exists
+    let existing = document.getElementById(`video-${remoteId}`);
+    if (!existing) {
+      addVideoTile(remoteId, event.streams[0], false);
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+      removeVideoTile(remoteId);
+      pc.close();
+      delete projectPeers[remoteId];
+    }
+  };
+
+  return pc;
+}
+
+function addVideoTile(userId, stream, isLocal) {
+  const container = document.getElementById('meeting-container');
+
+  const wrap = document.createElement('div');
+  wrap.id = `video-wrapper-${userId}`;
+  wrap.style.position = 'relative';
+  wrap.style.aspectRatio = '16/9';
+  wrap.style.background = '#111';
+  wrap.style.borderRadius = '8px';
+  wrap.style.overflow = 'hidden';
+  wrap.style.boxShadow = '0 2px 5px rgba(0,0,0,0.5)';
+
+  const vid = document.createElement('video');
+  vid.id = `video-${userId}`;
+  vid.autoplay = true;
+  vid.playsInline = true;
+  if (isLocal) vid.muted = true; // Avoid feedback
+  vid.srcObject = stream;
+  vid.style.width = '100%';
+  vid.style.height = '100%';
+  vid.style.objectFit = 'cover';
+
+  const label = document.createElement('div');
+  label.textContent = isLocal ? "You" : `User ${userId}`;
+  label.style.position = 'absolute';
+  label.style.bottom = '8px';
+  label.style.left = '8px';
+  label.style.background = 'rgba(0,0,0,0.6)';
+  label.style.padding = '4px 8px';
+  label.style.borderRadius = '4px';
+  label.style.color = 'white';
+  label.style.fontSize = '12px';
+
+  wrap.appendChild(vid);
+  wrap.appendChild(label);
+  container.appendChild(wrap);
+}
+
+function removeVideoTile(userId) {
+  const wrap = document.getElementById(`video-wrapper-${userId}`);
+  if (wrap) wrap.remove();
+}
+
+function sendProjectRTC(payload) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const msg = Object.assign({ type: 'rtc' }, payload);
+  ws.send(JSON.stringify(msg));
+}
+
+
 
 function openCallOverlay(kind, incoming) {
   const overlay = document.getElementById('call-overlay');

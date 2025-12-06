@@ -485,6 +485,8 @@ class ProjectChatConsumer(AsyncWebsocketConsumer):
                 await self._handle_project_message(data)
             elif t == 'typing':
                 await self._handle_project_typing(data)
+            elif t == 'rtc':
+                await self._handle_project_rtc(data)
             else:
                 logger.debug("receive (project): unknown type %s", t)
         except Exception:
@@ -569,6 +571,36 @@ class ProjectChatConsumer(AsyncWebsocketConsumer):
             }))
         except Exception:
             logger.exception("project_typing: send failed")
+
+    async def _handle_project_rtc(self, data):
+        """
+        Forward RTC signals for project mesh P2P.
+        """
+        try:
+            payload = {
+                "type": "project_rtc",
+                "action": data.get("action"),
+                "from_id": self.user.id,
+                "to_id": data.get("to_id"),  # If targeted
+                "sdp": data.get("sdp"),
+                "candidate": data.get("candidate"),
+            }
+            await self.channel_layer.group_send(self.room_group_name, payload)
+        except Exception:
+            logger.exception("_handle_project_rtc: failed")
+
+    async def project_rtc(self, event):
+        try:
+            await self.send(text_data=json.dumps({
+                "type": "rtc",
+                "action": event.get("action"),
+                "from_id": event.get("from_id"),
+                "to_id": event.get("to_id"),
+                "sdp": event.get("sdp"),
+                "candidate": event.get("candidate"),
+            }))
+        except Exception:
+            logger.exception("project_rtc: send failed")
 
     async def user_status(self, event):
         try:
