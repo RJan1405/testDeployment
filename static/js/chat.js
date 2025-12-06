@@ -812,6 +812,27 @@ function createMessageElement(msg) {
     inviteCard.appendChild(title);
     inviteCard.appendChild(joinBtn);
     textEl.appendChild(inviteCard);
+  } else if (msg.text === '[PROJECT_MEETING_ENDED]') {
+    // Hide this message
+    div.style.display = 'none';
+
+    // Find the last invite card and mark it as ended
+    // We delay slightly to ensure DOM is ready if loading history
+    setTimeout(() => {
+      const container = document.getElementById('messages-container');
+      if (container) {
+        const invites = container.querySelectorAll('.meeting-invite-card:not(.ended)');
+        if (invites.length > 0) {
+          const last = invites[invites.length - 1];
+          last.classList.add('ended');
+          last.style.background = '#f3f4f6';
+          last.style.border = '1px solid #d1d5db';
+          last.innerHTML = '<strong>🏁 Meeting Ended</strong>';
+          last.style.color = '#6b7280';
+          last.style.textAlign = 'center';
+        }
+      }
+    }, 10);
   } else {
     textEl.textContent = msg.text || '';
   }
@@ -2473,6 +2494,19 @@ window.closeMeetingOverlay = function () {
   if (projectLocalStream) {
     projectLocalStream.getTracks().forEach(t => t.stop());
     projectLocalStream = null;
+  }
+
+  // Check if I was the last one (before clearing peers)
+  const wasLast = Object.keys(projectPeers).length === 0;
+
+  if (wasLast) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'message',
+        project_id: currentChatId,
+        text: '[PROJECT_MEETING_ENDED]'
+      }));
+    }
   }
 
   // Cleanup Peers
