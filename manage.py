@@ -4,8 +4,6 @@ import os
 import sys
 
 
-<<<<<<< HEAD
-=======
 import ssl
 
 # Monkeypatch for Python 3.10+ where ssl.wrap_socket is removed
@@ -17,8 +15,6 @@ if not hasattr(ssl, 'wrap_socket'):
         return context.wrap_socket(sock, server_side=True)
     ssl.wrap_socket = wrap_socket
 
-
->>>>>>> exp/main
 def main():
     """Run administrative tasks."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'teams_chat.settings')
