@@ -114,26 +114,29 @@ async function loadRecentChats() {
 
 async function loadChatMetadata(type, id) {
   try {
-    if (type !== 'user') return;
-
-    const key = `user_${id}`;
+    const key = `${type}_${id}`;
     if (chatMetadata.has(key)) return; // Already loaded
 
-    // Fetch all messages to get files count and metadata
-    const url = `${API_BASE}/messages/user/${id}/`;
+    let url = '';
+    if (type === 'user') {
+      url = `${API_BASE}/messages/user/${id}/`;
+    } else {
+      url = `${API_BASE}/messages/project/${id}/`;
+    }
+
     const res = await fetch(url, { headers: defaultHeaders() });
     if (!res.ok) throw new Error(`Status ${res.status}`);
     const messages = await res.json();
 
     let filesCount = 0;
     let lastActivityTime = null;
-    const files = []; // ✅ NEW: Store all files
+    let lastMessageText = '';
+    const files = [];
 
     if (Array.isArray(messages)) {
       messages.forEach(msg => {
         if (msg.file_url) {
           filesCount++;
-          // ✅ NEW: Add file details
           files.push({
             name: msg.file_name || extractFileNameFromUrl(msg.file_url),
             url: msg.file_url,
@@ -144,6 +147,10 @@ async function loadChatMetadata(type, id) {
         }
         if (msg.timestamp && (!lastActivityTime || new Date(msg.timestamp) > new Date(lastActivityTime))) {
           lastActivityTime = msg.timestamp;
+          // Clean text for preview
+          if (msg.text === '[PROJECT_MEETING_INVITE]') lastMessageText = '🎥 Meeting Started';
+          else if (msg.text === '[PROJECT_MEETING_ENDED]') lastMessageText = '🏁 Meeting Ended';
+          else lastMessageText = msg.text || (msg.file_url ? '📎 Attachment' : '');
         }
       });
     }
@@ -151,11 +158,24 @@ async function loadChatMetadata(type, id) {
     chatMetadata.set(key, {
       filesCount,
       lastActivity: lastActivityTime,
+      lastMessage: lastMessageText,
       messageCount: messages.length,
-      files: files // ✅ NEW: Store files array
+      files: files
     });
 
-    console.log(`✅ Chat metadata loaded for user ${id}:`, chatMetadata.get(key));
+    console.log(`✅ Chat metadata loaded for ${type} ${id}:`, chatMetadata.get(key));
+
+    // Trigger re-render if needed
+    if (type === 'project') {
+      const pList = document.getElementById('projects-list');
+      // We can't easily find the specific element without ID, but we can re-render if we want, 
+      // or just update if we had IDs. For now, calling renderProjects again might be heavy, 
+      // so we just let the next render pick it up, or rely on initial load.
+      // Better: update specific item if possible.
+      const previewEl = document.getElementById(`project-preview-${id}`);
+      if (previewEl) previewEl.textContent = lastMessageText || 'No messages';
+    }
+
   } catch (err) {
     console.error('❌ Error loading chat metadata:', err);
   }
@@ -222,6 +242,12 @@ async function loadProjects() {
     const res = await fetch(url, { headers: defaultHeaders() });
     if (!res.ok) throw new Error(`Status ${res.status}`);
     const projects = await res.json();
+
+    // Load metadata for projects
+    for (const p of projects) {
+      await loadChatMetadata('project', p.id);
+    }
+
     renderProjects(projects);
   } catch (err) {
     console.error('❌ Error loading projects:', err);
@@ -259,7 +285,10 @@ function createProjectItem(project) {
 
   const preview = document.createElement('div');
   preview.className = 'chat-preview';
-  preview.textContent = `${project.members?.length || 0} members`;
+  preview.id = `project-preview-${project.id}`;
+
+  const meta = chatMetadata.get(`project_${project.id}`);
+  preview.textContent = meta?.lastMessage || `${project.members?.length || 0} members`;
 
   info.appendChild(name);
   info.appendChild(preview);
@@ -338,7 +367,11 @@ async function loadChatWindow(type, id) {
     const mediaToggleBtn = '<button id="media-toggle-header-btn" title="Media" style="margin-left:6px;border:none;background:#e5e7eb;color:#111827;border-radius:6px;padding:6px 8px;cursor:pointer">🖼️</button>';
     let callBtns = '';
     if (type === 'user') {
-      callBtns = '';
+      callBtns = `
+        <div class="call-buttons">
+          <button id="voice-call-btn" class="call-btn" title="Voice Call">📞</button>
+          <button id="video-call-btn" class="call-btn" title="Video Call">📹</button>
+        </div>`;
     } else {
       callBtns = `
         <div class="call-buttons">
@@ -736,9 +769,15 @@ function extractFileNameFromUrl(url) {
 function scrollToBottom() {
   const messagesContainer = document.getElementById('messages-container');
   if (messagesContainer) {
+    // Immediate scroll
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    // Delayed scroll to handle image/layout loading
     setTimeout(() => {
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }, 50);
+    }, 100);
+    setTimeout(() => {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }, 300);
   }
 }
 
@@ -775,7 +814,75 @@ function createMessageElement(msg) {
 
   const textEl = document.createElement('div');
   textEl.className = 'message-content';
-  textEl.textContent = msg.text || '';
+
+  // Check for Meeting Invite
+  if (msg.text === '[PROJECT_MEETING_INVITE]') {
+    const inviteCard = document.createElement('div');
+    inviteCard.className = 'meeting-invite-card';
+    inviteCard.style.background = '#eff6ff';
+    inviteCard.style.border = '1px solid #bfdbfe';
+    inviteCard.style.borderRadius = '8px';
+    inviteCard.style.padding = '12px';
+    inviteCard.style.marginTop = '4px';
+    inviteCard.style.display = 'flex';
+    inviteCard.style.flexDirection = 'column';
+    inviteCard.style.gap = '8px';
+
+    const title = document.createElement('div');
+    title.innerHTML = '<strong>🎥 Video Meeting Started</strong>';
+    title.style.fontSize = '14px';
+    title.style.color = '#1e3a8a';
+
+    const joinBtn = document.createElement('button');
+    joinBtn.textContent = 'Join Meeting';
+    joinBtn.style.background = '#2563eb';
+    joinBtn.style.color = 'white';
+    joinBtn.style.border = 'none';
+    joinBtn.style.padding = '8px 16px';
+    joinBtn.style.borderRadius = '6px';
+    joinBtn.style.fontWeight = '600';
+    joinBtn.style.cursor = 'pointer';
+    joinBtn.onclick = () => joinMeetingFromInvite();
+
+    inviteCard.appendChild(title);
+    inviteCard.appendChild(joinBtn);
+    textEl.appendChild(inviteCard);
+  } else if (msg.text === '[PROJECT_MEETING_ENDED]') {
+    const endCard = document.createElement('div');
+    endCard.style.padding = '8px 12px';
+    endCard.style.background = '#f3f4f6';
+    endCard.style.border = '1px solid #d1d5db';
+    endCard.style.borderRadius = '8px';
+    endCard.style.color = '#6b7280';
+    endCard.style.fontSize = '13px';
+    endCard.style.fontWeight = '500';
+    endCard.style.display = 'flex';
+    endCard.style.alignItems = 'center';
+    endCard.style.gap = '8px';
+    endCard.innerHTML = '<span>🏁</span> <span>Video meeting ended</span>';
+    textEl.appendChild(endCard);
+
+    // Disable the last invite card
+    setTimeout(() => {
+      const container = document.getElementById('messages-container');
+      if (container) {
+        const invites = container.querySelectorAll('.meeting-invite-card:not(.ended)');
+        if (invites.length > 0) {
+          const last = invites[invites.length - 1];
+          last.classList.add('ended');
+          const btn = last.querySelector('button');
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Meeting Ended';
+            btn.style.background = '#9ca3af';
+            btn.style.cursor = 'not-allowed';
+          }
+        }
+      }
+    }, 10);
+  } else {
+    textEl.textContent = msg.text || '';
+  }
   content.appendChild(textEl);
 
   const persistedReply = msg.id !== undefined ? getReplyForMessage(msg.id) : null;
@@ -2365,7 +2472,7 @@ function setupCallButtons() {
   if (aBtn) aBtn.onclick = () => startOutgoingCall('audio');
 
   const meetBtn = document.getElementById('project-meeting-btn');
-  if (meetBtn) meetBtn.onclick = openProjectMeeting;
+  if (meetBtn) meetBtn.onclick = confirmHostMeeting;
 
   const endBtn = document.getElementById('call-end-btn');
   const acceptBtn = document.getElementById('call-accept-btn');
@@ -2379,6 +2486,40 @@ function setupCallButtons() {
   const camBtn = document.getElementById('toggle-cam-btn');
   if (micBtn) micBtn.onclick = () => { if (rtcLocalStream) rtcLocalStream.getAudioTracks().forEach(t => t.enabled = !t.enabled); };
   if (camBtn) camBtn.onclick = () => { if (rtcLocalStream) rtcLocalStream.getVideoTracks().forEach(t => t.enabled = !t.enabled); };
+
+  // Project Meeting Controls
+  const mCam = document.getElementById('meeting-cam-btn');
+  const mMic = document.getElementById('meeting-mic-btn');
+  const mShare = document.getElementById('meeting-share-btn');
+  const mInvite = document.getElementById('meeting-invite-btn');
+
+  if (mCam) mCam.onclick = toggleMeetingCam;
+  if (mMic) mMic.onclick = toggleMeetingMic;
+  if (mShare) mShare.onclick = toggleScreenShare;
+  if (mInvite) mInvite.onclick = inviteToMeeting;
+
+  const mExpand = document.getElementById('meeting-expand-btn');
+  if (mExpand) mExpand.onclick = () => toggleMeetingSize();
+
+  const mReact = document.getElementById('meeting-reaction-btn');
+  const mHand = document.getElementById('meeting-hand-btn');
+
+  if (mReact) {
+    mReact.onclick = (e) => {
+      e.stopPropagation();
+      const popup = document.getElementById('reactions-popup');
+      if (popup) popup.classList.toggle('hidden');
+    };
+    // Close popup when clicking outside
+    document.addEventListener('click', (e) => {
+      const popup = document.getElementById('reactions-popup');
+      if (popup && !popup.contains(e.target) && e.target !== mReact) {
+        popup.classList.add('hidden');
+      }
+    });
+  }
+
+  if (mHand) mHand.onclick = toggleRaiseHand;
 }
 
 /* ============================================================
@@ -2387,6 +2528,9 @@ function setupCallButtons() {
 
 let projectPeers = {}; // { userId: RTCPeerConnection }
 let projectLocalStream = null;
+let isScreenSharing = false;
+let originalVideoTrack = null;
+let isHandRaised = false;
 
 async function openProjectMeeting() {
   if (currentChatType !== 'project' || !currentChatId) return;
@@ -2420,6 +2564,8 @@ async function openProjectMeeting() {
 
   // 3. Show Overlay
   overlay.classList.remove('hidden');
+  // Default to minimized ("small")
+  overlay.classList.add('minimized');
 
   // 4. broadcast JOIN request to all group members
   sendProjectRTC({ action: 'join_request' });
@@ -2434,6 +2580,19 @@ window.closeMeetingOverlay = function () {
   if (projectLocalStream) {
     projectLocalStream.getTracks().forEach(t => t.stop());
     projectLocalStream = null;
+  }
+
+  // Check if I was the last one (before clearing peers)
+  const wasLast = Object.keys(projectPeers).length === 0;
+
+  if (wasLast) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'message',
+        project_id: currentChatId,
+        text: '[PROJECT_MEETING_ENDED]'
+      }));
+    }
   }
 
   // Cleanup Peers
@@ -2472,8 +2631,11 @@ function handleProjectRTC(data) {
     handleProjectOffer(fromId, data.sdp);
   } else if (action === 'answer') {
     if (pc) pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-  } else if (action === 'candidate') {
     if (pc && data.candidate) pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+  } else if (action === 'raise_hand') {
+    updateRemoteHandStatus(fromId, data.raised);
+  } else if (action === 'reaction') {
+    showFlyingReaction(fromId, data.content);
   }
 }
 
@@ -2600,6 +2762,95 @@ function sendProjectRTC(payload) {
   ws.send(JSON.stringify(msg));
 }
 
+function confirmHostMeeting() {
+  if (currentChatType !== 'project' || !currentChatId) return;
+
+  // Simple custom modal for confirmation
+  const overlay = document.createElement('div');
+  overlay.id = 'host-meeting-overlay';
+  overlay.style.position = 'fixed';
+  overlay.style.inset = '0';
+  overlay.style.background = 'rgba(0,0,0,0.5)';
+  overlay.style.display = 'flex';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  overlay.style.zIndex = '10000';
+
+  const modal = document.createElement('div');
+  modal.style.background = 'white';
+  modal.style.padding = '24px';
+  modal.style.borderRadius = '12px';
+  modal.style.textAlign = 'center';
+  modal.style.boxShadow = '0 20px 25px -5px rgba(0,0,0,0.1)';
+  modal.style.maxWidth = '90vw';
+  modal.style.width = '320px';
+
+  const title = document.createElement('h3');
+  title.textContent = 'Start Video Meeting?';
+  title.style.fontSize = '18px';
+  title.style.fontWeight = '700';
+  title.style.marginBottom = '12px';
+  title.style.color = '#111827';
+
+  const text = document.createElement('p');
+  text.textContent = 'This will start a meeting and notify everyone in the group to join.';
+  text.style.fontSize = '14px';
+  text.style.color = '#6b7280';
+  text.style.marginBottom = '20px';
+
+  const btnGroup = document.createElement('div');
+  btnGroup.style.display = 'flex';
+  btnGroup.style.gap = '10px';
+  btnGroup.style.justifyContent = 'center';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.padding = '8px 16px';
+  cancelBtn.style.border = '1px solid #d1d5db';
+  cancelBtn.style.background = 'white';
+  cancelBtn.style.borderRadius = '6px';
+  cancelBtn.style.cursor = 'pointer';
+  cancelBtn.onclick = () => overlay.remove();
+
+  const hostBtn = document.createElement('button');
+  hostBtn.textContent = 'Host Meeting';
+  hostBtn.style.padding = '8px 16px';
+  hostBtn.style.border = 'none';
+  hostBtn.style.background = '#2563eb';
+  hostBtn.style.color = 'white';
+  hostBtn.style.borderRadius = '6px';
+  hostBtn.style.fontWeight = '600';
+  hostBtn.style.cursor = 'pointer';
+  hostBtn.onclick = () => {
+    overlay.remove();
+    startHostingMeeting();
+  };
+
+  btnGroup.appendChild(cancelBtn);
+  btnGroup.appendChild(hostBtn);
+  modal.appendChild(title);
+  modal.appendChild(text);
+  modal.appendChild(btnGroup);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+function startHostingMeeting() {
+  openProjectMeeting();
+  // Send invite
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'message',
+      project_id: currentChatId,
+      text: '[PROJECT_MEETING_INVITE]'
+    }));
+  }
+}
+
+function joinMeetingFromInvite() {
+  openProjectMeeting();
+}
+
 
 
 function openCallOverlay(kind, incoming) {
@@ -2717,3 +2968,233 @@ function connectNotifySocket() {
     setTimeout(connectNotifySocket, backoff);
   };
 }
+
+/* ============================================================
+   MEETING CONTROLS
+   ============================================================ */
+
+function toggleMeetingCam() {
+  if (projectLocalStream) {
+    const vidTrack = projectLocalStream.getVideoTracks()[0];
+    if (vidTrack) {
+      vidTrack.enabled = !vidTrack.enabled;
+      updateMeetingBtnState('meeting-cam-btn', vidTrack.enabled);
+    }
+  }
+}
+
+function toggleMeetingMic() {
+  if (projectLocalStream) {
+    const audTrack = projectLocalStream.getAudioTracks()[0];
+    if (audTrack) {
+      audTrack.enabled = !audTrack.enabled;
+      updateMeetingBtnState('meeting-mic-btn', audTrack.enabled);
+    }
+  }
+}
+
+function updateMeetingBtnState(id, enabled) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  if (enabled) {
+    btn.style.background = '';
+    btn.style.color = '';
+  } else {
+    btn.style.background = '#dc2626';
+    btn.style.color = 'white';
+    btn.style.borderColor = '#b91c1c';
+  }
+}
+
+async function toggleScreenShare() {
+  if (isScreenSharing) {
+    stopScreenShare();
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    const screenTrack = stream.getVideoTracks()[0];
+
+    // Keep reference to original cam track
+    if (projectLocalStream) {
+      originalVideoTrack = projectLocalStream.getVideoTracks()[0];
+    }
+
+    // Replace track in local stream (for self view)
+    if (projectLocalStream) {
+      projectLocalStream.removeTrack(originalVideoTrack);
+      projectLocalStream.addTrack(screenTrack);
+    }
+
+    // Update Local Video Element
+    const localVideo = document.getElementById(`video-${currentUserId}`);
+    if (localVideo) localVideo.srcObject = projectLocalStream;
+
+    // Replace track in all PeerConnections
+    Object.values(projectPeers).forEach(pc => {
+      const sender = pc.getSenders().find(s => s.track.kind === 'video');
+      if (sender) {
+        sender.replaceTrack(screenTrack);
+      }
+    });
+
+    // Handle user stopping share via browser UI
+    screenTrack.onended = () => stopScreenShare();
+
+    isScreenSharing = true;
+    const btn = document.getElementById('meeting-share-btn');
+    if (btn) {
+      btn.style.background = '#2563eb'; // Blue to indicate active
+      btn.style.color = 'white';
+    }
+
+  } catch (e) {
+    console.error('Error sharing screen:', e);
+  }
+}
+
+function stopScreenShare() {
+  if (!isScreenSharing) return;
+
+  // Stop screen track
+  const screenTrack = projectLocalStream.getVideoTracks()[0];
+  if (screenTrack) screenTrack.stop();
+
+  // Restore camera track
+  if (originalVideoTrack) {
+    projectLocalStream.removeTrack(screenTrack);
+    projectLocalStream.addTrack(originalVideoTrack);
+    // Important: Re-enable if it was enabled before? Assuming yes.
+    originalVideoTrack.enabled = true;
+  }
+
+  // Update Local Video
+  const localVideo = document.getElementById(`video-${currentUserId}`);
+  if (localVideo) localVideo.srcObject = projectLocalStream;
+
+  // Replace track in peers
+  Object.values(projectPeers).forEach(pc => {
+    const sender = pc.getSenders().find(s => s.track.kind === 'video');
+    if (sender && originalVideoTrack) {
+      sender.replaceTrack(originalVideoTrack);
+    }
+  });
+
+  isScreenSharing = false;
+  originalVideoTrack = null;
+  const btn = document.getElementById('meeting-share-btn');
+  if (btn) {
+    btn.style.background = '';
+    btn.style.color = '';
+  }
+}
+
+function inviteToMeeting() {
+  // 1. Send invite to group chat
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'message',
+      project_id: currentChatId,
+      text: '[PROJECT_MEETING_INVITE]'
+    }));
+  }
+
+  // 2. Copy link to clipboard
+  const uniqueLink = `${window.location.origin}/chat/project/${currentProjectId}`;
+  navigator.clipboard.writeText(`Join my meeting: ${uniqueLink}`).then(() => {
+    alert('Invite sent to group & Link copied to clipboard!');
+  }).catch(() => {
+    alert('Invite sent to group!');
+  });
+}
+
+function toggleMeetingSize() {
+  const overlay = document.getElementById('meeting-overlay');
+  if (overlay) overlay.classList.toggle('minimized');
+}
+
+/* ============================================================
+   MEETING REACTIONS & RAISE HAND
+   ============================================================ */
+
+function toggleRaiseHand() {
+  isHandRaised = !isHandRaised;
+
+  // Update local UI
+  const btn = document.getElementById('meeting-hand-btn');
+  if (btn) {
+    if (isHandRaised) {
+      btn.style.background = '#eab308'; // yellow
+      btn.style.color = '#fff';
+    } else {
+      btn.style.background = '';
+      btn.style.color = '';
+    }
+  }
+
+  // Update local badge
+  updateRemoteHandStatus(currentUserId, isHandRaised);
+
+  // Broadcast to peers
+  sendProjectRTC({
+    action: 'raise_hand',
+    raised: isHandRaised
+  });
+}
+
+function updateRemoteHandStatus(userId, raised) {
+  const wrap = document.getElementById(`video-wrapper-${userId}`);
+  if (!wrap) return;
+
+  let badge = wrap.querySelector('.video-hand-badge');
+  if (raised) {
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'video-hand-badge';
+      badge.textContent = '✋';
+      wrap.appendChild(badge);
+    }
+  } else {
+    if (badge) badge.remove();
+  }
+}
+
+function sendMeetingReaction(emoji) {
+  // Hide popup
+  const popup = document.getElementById('reactions-popup');
+  if (popup) popup.classList.add('hidden');
+
+  // Show locally
+  showFlyingReaction(currentUserId, emoji);
+
+  // Broadcast
+  sendProjectRTC({
+    action: 'reaction',
+    content: emoji
+  });
+}
+
+function showFlyingReaction(userId, emoji) {
+  const overlay = document.getElementById('meeting-container'); // use container to constrain to video area? No, overlay is better for global center
+  if (!overlay) return;
+
+  const el = document.createElement('div');
+  el.className = 'flying-reaction';
+  el.textContent = emoji;
+
+  // If we know who sent it, maybe position it over their video? 
+  // For now, let's random position slightly to make it fun or center it. 
+  // The CSS default was center bottom. Let's add slight random X offset.
+  const randomX = (Math.random() - 0.5) * 50; // -25% to +25%
+  el.style.transform = `translateX(calc(-50% + ${randomX}px))`;
+
+  // Append to a wrapper that sits on top of video grid
+  // We'll just append to meeting-container but ensure z-index is high
+  overlay.appendChild(el);
+
+  // Remove after animation
+  setTimeout(() => el.remove(), 2000);
+}
+
+
