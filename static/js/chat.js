@@ -2313,6 +2313,7 @@ function setupEventListeners() {
   setupMediaToggle();
   setupNewChatButton();
   setupCallButtons();
+  setupGroupCreationListeners();
 
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('#new-chat-btn');
@@ -3198,3 +3199,334 @@ function showFlyingReaction(userId, emoji) {
 }
 
 
+
+/* ============================================================
+   GROUP CREATION LOGIC
+   ============================================================ */
+
+/* ============================================================
+   GROUP CREATION LOGIC
+   ============================================================ */
+
+function setupGroupCreationListeners() {
+  console.log('init group creation listeners');
+  const openBtn = document.getElementById('create-group-btn');
+  const overlay = document.getElementById('create-group-overlay');
+  const closeBtn = document.getElementById('close-group-btn');
+  const submitBtn = document.getElementById('submit-group-btn');
+
+  // New buttons
+  const addUsersBtn = document.getElementById('group-add-users-btn');
+
+  if (openBtn) {
+    console.log('Create Group Button found');
+    openBtn.onclick = (e) => {
+      console.log('Create Group Button clicked');
+      e.stopPropagation();
+      if (typeof openGroupCreationModal === 'function') {
+        openGroupCreationModal();
+      } else {
+        // Fallback if helper missing for some reason
+        if (overlay) {
+          overlay.classList.remove('hidden');
+          overlay.style.display = 'flex';
+          resetGroupCreationForm();
+        }
+      }
+    };
+  } else {
+    console.error('Create Group Button NOT found');
+  }
+
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      if (typeof closeGroupCreationModal === 'function') closeGroupCreationModal();
+      else if (overlay) {
+        overlay.classList.add('hidden');
+        overlay.style.display = 'none';
+      }
+    };
+  }
+
+  // Close on click outside
+  if (overlay) {
+    overlay.onclick = (e) => {
+      if (e.target === overlay) {
+        if (typeof closeGroupCreationModal === 'function') closeGroupCreationModal();
+        else {
+          overlay.classList.add('hidden');
+          overlay.style.display = 'none';
+        }
+      }
+    };
+  }
+
+  // Logic for "Add Users" button
+  if (addUsersBtn) {
+    addUsersBtn.onclick = async () => {
+      console.log('Add Users clicked');
+      // Show user selection area
+      const area = document.getElementById('group-user-selection-area');
+      if (area) area.style.display = 'block';
+
+      // Hide "Add Users" button, Show "Make Group" button
+      addUsersBtn.style.display = 'none';
+      if (submitBtn) submitBtn.style.display = 'block';
+
+      // Load users
+      await loadUsersForGroupCreation();
+    };
+  }
+
+  // Search input listener
+  const searchInput = document.getElementById('group-member-search');
+  if (searchInput) {
+    searchInput.oninput = (e) => {
+      filterGroupMemberUsers(e.target.value);
+    };
+  }
+
+  if (submitBtn) {
+    submitBtn.onclick = handleGroupCreate;
+  }
+}
+
+async function loadUsersForGroupCreation() {
+  const container = document.getElementById('group-member-list');
+  if (!container) return;
+  container.innerHTML = '<div style="padding:10px; color:#6b7280;">Loading users...</div>';
+
+  try {
+    // Try list endpoint
+    let users = [];
+    const listRes = await fetch(`${API_BASE}/users/`, { headers: defaultHeaders() });
+
+    if (listRes.ok) {
+      users = await listRes.json();
+      // Handle pagination if DRF is paginated (usually 'results' key)
+      if (users.results && Array.isArray(users.results)) {
+        users = users.results;
+      }
+    } else {
+      // Fallback to searching common letters if list is restricted
+      const searchRes = await fetch(`${API_BASE}/users/search/?q=a`, { headers: defaultHeaders() });
+      if (searchRes.ok) users = await searchRes.json();
+    }
+
+    // Filter out current user
+    if (Array.isArray(users)) {
+      users = users.filter(u => u.id !== currentUserId);
+      // Sort by name
+      users.sort((a, b) => (a.first_name || a.username).localeCompare(b.first_name || b.username));
+    } else {
+      users = [];
+    }
+
+    // Store for filtering
+    container.dataset.allUsers = JSON.stringify(users);
+
+    renderGroupMemberUsers(users);
+
+  } catch (err) {
+    console.error('Error loading users:', err);
+    container.innerHTML = '<div style="padding:10px; color:#ef4444;">Failed to load users</div>';
+  }
+}
+
+function renderGroupMemberUsers(users) {
+  const container = document.getElementById('group-member-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!users || users.length === 0) {
+    container.innerHTML = '<div style="padding:10px; color:#6b7280;">No users found</div>';
+    return;
+  }
+
+  users.forEach(user => {
+    const div = document.createElement('div');
+    div.className = 'compose-item';
+    div.style.display = 'flex';
+    div.style.alignItems = 'center';
+    div.style.padding = '10px';
+    div.style.cursor = 'pointer';
+    div.style.borderBottom = '1px solid var(--border)';
+
+    // Checkbox
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = user.id;
+    checkbox.className = 'group-member-checkbox';
+    checkbox.style.marginRight = '12px';
+    checkbox.style.cursor = 'pointer';
+
+    // Avatar
+    const avatar = document.createElement('div');
+    avatar.className = 'compose-avatar';
+    avatar.textContent = (user.first_name?.[0] || user.username?.[0] || 'U').toUpperCase();
+    avatar.style.marginRight = '12px';
+
+    // Info
+    const info = document.createElement('div');
+    info.className = 'compose-info';
+
+    const name = document.createElement('div');
+    name.className = 'compose-name';
+    name.textContent = user.first_name ? `${user.first_name} ${user.last_name}` : user.username;
+    name.style.fontWeight = '600';
+    name.style.fontSize = '13px';
+
+    const username = document.createElement('div');
+    username.className = 'compose-username';
+    username.textContent = `@${user.username}`;
+    username.style.fontSize = '11px';
+    username.style.color = '#6b7280';
+
+    info.appendChild(name);
+    info.appendChild(username);
+
+    div.appendChild(checkbox);
+    div.appendChild(avatar);
+    div.appendChild(info);
+
+    // Toggle checkbox on click
+    div.onclick = (e) => {
+      if (e.target !== checkbox) {
+        checkbox.checked = !checkbox.checked;
+      }
+    };
+
+    container.appendChild(div);
+  });
+}
+
+function filterGroupMemberUsers(query) {
+  const container = document.getElementById('group-member-list');
+  if (!container || !container.dataset.allUsers) return;
+
+  let users = [];
+  try { users = JSON.parse(container.dataset.allUsers); } catch (e) { }
+
+  if (!query) {
+    renderGroupMemberUsers(users);
+    return;
+  }
+
+  const q = query.toLowerCase();
+  const filtered = users.filter(u =>
+    (u.first_name && u.first_name.toLowerCase().includes(q)) ||
+    (u.last_name && u.last_name.toLowerCase().includes(q)) ||
+    (u.username && u.username.toLowerCase().includes(q))
+  );
+
+  renderGroupMemberUsers(filtered);
+}
+
+function resetGroupCreationForm() {
+  const nameInput = document.getElementById('group-name-input');
+  const descInput = document.getElementById('group-desc-input');
+  const searchInput = document.getElementById('group-member-search');
+  const list = document.getElementById('group-member-list');
+  const userArea = document.getElementById('group-user-selection-area');
+  const addBtn = document.getElementById('group-add-users-btn');
+  const submitBtn = document.getElementById('submit-group-btn');
+
+  if (nameInput) nameInput.value = '';
+  if (descInput) descInput.value = '';
+  if (searchInput) searchInput.value = '';
+  if (list) list.innerHTML = '';
+
+  if (userArea) userArea.style.display = 'none';
+  if (addBtn) addBtn.style.display = 'block';
+  if (submitBtn) submitBtn.style.display = 'none';
+}
+
+async function handleGroupCreate() {
+  const nameInput = document.getElementById('group-name-input');
+  const descInput = document.getElementById('group-desc-input');
+
+  const name = nameInput.value.trim();
+  const description = descInput ? descInput.value.trim() : '';
+  const checkboxes = document.querySelectorAll('.group-member-checkbox:checked');
+  const memberIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+  if (!name) {
+    alert('Please enter a group name');
+    return;
+  }
+
+  const data = {
+    name: name,
+    description: description,
+    member_ids: memberIds
+  };
+
+  const btn = document.getElementById('submit-group-btn');
+  if (btn) {
+    btn.textContent = 'Creating...';
+    btn.disabled = true;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/projects/`, {
+      method: 'POST',
+      headers: defaultHeaders(),
+      body: JSON.stringify(data)
+    });
+
+    if (res.ok) {
+      const project = await res.json();
+      // Close modal
+      const closeBtn = document.getElementById('close-group-btn');
+      if (closeBtn) closeBtn.click();
+
+      // Reload projects
+      loadProjects();
+      // Open new project
+      openChat('project', project.id);
+    } else {
+      const err = await res.json();
+      let msg = 'Failed to create group';
+      if (err.name) msg = err.name[0];
+      else if (err.detail) msg = err.detail;
+      alert(msg);
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Error creating group');
+  } finally {
+    if (btn) {
+      btn.textContent = 'Make Group'; // Reset text
+      btn.disabled = false;
+    }
+  }
+}
+
+function openGroupCreationModal() {
+  const overlay = document.getElementById('create-group-overlay');
+  if (overlay) {
+    overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
+
+    // Reset view to initial state (hide user list)
+    const userArea = document.getElementById('group-user-selection-area');
+    const addUsersBtn = document.getElementById('group-add-users-btn');
+    const submitBtn = document.getElementById('submit-group-btn');
+
+    if (userArea) userArea.style.display = 'none';
+    if (addUsersBtn) addUsersBtn.style.display = 'block';
+    if (submitBtn) submitBtn.style.display = 'none';
+
+    // Clear inputs
+    resetGroupCreationForm();
+  }
+}
+
+function closeGroupCreationModal() {
+  const overlay = document.getElementById('create-group-overlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+    overlay.style.display = 'none';
+    resetGroupCreationForm();
+  }
+}

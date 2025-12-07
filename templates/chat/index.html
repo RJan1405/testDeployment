@@ -1709,7 +1709,11 @@
 
     <!-- Projects -->
     <div class="sidebar-section">
-      <div class="section-header">Projects</div>
+      <div class="section-header" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>Projects</span>
+        <button id="create-group-btn" class="compose-btn" title="Create Group"
+          style="width:24px; height:24px; font-size:16px; border:none; background:transparent;">+</button>
+      </div>
       <div id="projects-list" class="chat-list"></div>
     </div>
   </div>
@@ -1785,6 +1789,47 @@
     <div class="compose-title">New Chat</div>
     <div class="compose-search"><input id="compose-search-input" type="text" placeholder="Search name" /></div>
     <div id="compose-list" class="compose-list"></div>
+  </div>
+</div>
+
+<div id="create-group-overlay" class="compose-overlay hidden">
+  <div class="compose-modal" style="width: 450px;">
+    <div class="compose-title" style="display:flex; justify-content:space-between;">
+      <span>Create Group</span>
+      <button id="close-group-btn" style="background:none; border:none; cursor:pointer; font-size:16px;">✕</button>
+    </div>
+
+    <!-- STEP 1: Basic Info -->
+    <div style="margin-bottom: 12px;">
+      <label style="font-size:12px; font-weight:600; color:var(--text-light); display:block; margin-bottom:4px;">Group
+        Name</label>
+      <input id="group-name-input" type="text" placeholder="Enter group name..."
+        style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:13px; outline:none;" />
+    </div>
+
+    <div style="margin-bottom: 12px;">
+      <label
+        style="font-size:12px; font-weight:600; color:var(--text-light); display:block; margin-bottom:4px;">Description
+        (Optional)</label>
+      <textarea id="group-desc-input" placeholder="Group purpose..."
+        style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:13px; outline:none; resize:none; height:60px;"></textarea>
+    </div>
+
+    <!-- BUTTON to reveal user list -->
+    <button id="group-add-users-btn" class="send-btn" style="width:100%; margin-top:8px;">Add Users</button>
+
+    <!-- STEP 2: Member Selection (Initially Hidden) -->
+    <div id="group-user-selection-area" style="display: none; margin-top: 16px;">
+      <label style="font-size:12px; font-weight:600; color:var(--text-light); display:block; margin-bottom:4px;">Select
+        Members</label>
+      <div class="compose-search"><input id="group-member-search" type="text" placeholder="Search users" /></div>
+      <div id="group-member-list" class="compose-list" style="max-height: 200px;"></div>
+    </div>
+
+    <!-- Final Action -->
+    <div style="margin-top: 16px; display:flex; justify-content:flex-end;">
+      <button id="submit-group-btn" class="send-btn" style="width:100%; display:none;">Make Group</button>
+    </div>
   </div>
 </div>
 
@@ -1882,7 +1927,7 @@
   </div>
 </div>
 
-<script src="{% static 'js/chat.js' %}"></script>
+<script src="{% static 'js/chat.js' %}?v={{ turn_config|length|add:20 }}"></script>
 <script src="{% static 'js/search.js' %}"></script>
 
 {% endblock %}
