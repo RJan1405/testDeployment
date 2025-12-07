@@ -2458,9 +2458,19 @@ let rtcIncomingOffer = null;
 let rtcPeerToId = null;
 
 function getRtcConfig() {
-  const base = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+  const base = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+    ]
+  };
   try {
-    if (window.TURN_CONFIG && Array.isArray(window.TURN_CONFIG)) base.iceServers = base.iceServers.concat(window.TURN_CONFIG);
+    if (window.TURN_CONFIG && Array.isArray(window.TURN_CONFIG)) {
+      base.iceServers = base.iceServers.concat(window.TURN_CONFIG);
+    }
   } catch (e) { }
   return base;
 }
@@ -2631,7 +2641,10 @@ function handleProjectRTC(data) {
     handleProjectOffer(fromId, data.sdp);
   } else if (action === 'answer') {
     if (pc) pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-    if (pc && data.candidate) pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+  } else if (action === 'candidate') {
+    if (pc && data.candidate) {
+      try { pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch (e) { }
+    }
   } else if (action === 'raise_hand') {
     updateRemoteHandStatus(fromId, data.raised);
   } else if (action === 'reaction') {

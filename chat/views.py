@@ -2,6 +2,8 @@
 
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
+import os
+import json
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth.models import User
@@ -230,9 +232,16 @@ class MessageViewSet(viewsets.ModelViewSet):
 def chat_index(request):
     """Main chat interface"""
     user_projects = Project.objects.filter(members=request.user)
+    # Get TURN config from env var
+    try:
+        turn_config = json.loads(os.environ.get('TURN_CONFIG', '[]'))
+    except json.JSONDecodeError:
+        turn_config = []
+    
     context = {
         'user': request.user,
-        'projects': user_projects
+        'projects': user_projects,
+        'turn_config': turn_config
     }
     return render(request, 'chat/index.html', context)
 

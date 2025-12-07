@@ -1882,6 +1882,10 @@
   </div>
 </div>
 
+{{ turn_config|json_script:"turn-config-data" }}
+<script>
+  window.TURN_CONFIG = JSON.parse(document.getElementById('turn-config-data').textContent);
+</script>
 <script src="{% static 'js/chat.js' %}"></script>
 <script src="{% static 'js/search.js' %}"></script>
 
