@@ -16,6 +16,8 @@ from .serializers import (
     MessageSerializer, UserSerializer, ProjectSerializer,
     MessageCreateSerializer, RecentChatSerializer
 )
+from .forms import SignUpForm
+from django.contrib.auth import login
 
 # ==================== LOGIN VIEW ====================
 
@@ -26,6 +28,21 @@ class CustomLoginView(LoginView):
 
     def get_success_url(self):
         return '/chat/'
+
+# ==================== SIGNUP VIEW ====================
+
+def signup_view(request):
+    """Signup view"""
+    if request.method == 'POST':
+        form = SignUpForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            login(request, user)
+            return redirect('chat_index')
+    else:
+        form = SignUpForm()
+    return render(request, 'signup.html', {'form': form})
+
 
 # ==================== AUTHENTICATION ====================
 
