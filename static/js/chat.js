@@ -875,24 +875,26 @@ function createMessageElement(msg) {
     endCard.innerHTML = '<span>🏁</span> <span>Video meeting ended</span>';
     textEl.appendChild(endCard);
 
-    // Disable the last invite card
+    // Disable the nearest previous invite card
     setTimeout(() => {
-      const container = document.getElementById('messages-container');
-      if (container) {
-        const invites = container.querySelectorAll('.meeting-invite-card:not(.ended)');
-        if (invites.length > 0) {
-          const last = invites[invites.length - 1];
-          last.classList.add('ended');
-          const btn = last.querySelector('button');
+      if (!div.parentElement) return;
+      let prev = div.previousElementSibling;
+      while (prev) {
+        const invite = prev.querySelector('.meeting-invite-card:not(.ended)');
+        if (invite) {
+          invite.classList.add('ended');
+          const btn = invite.querySelector('button');
           if (btn) {
             btn.disabled = true;
             btn.textContent = 'Meeting Ended';
             btn.style.background = '#9ca3af';
             btn.style.cursor = 'not-allowed';
           }
+          break; // Stop after disabling the most recent previous invite
         }
+        prev = prev.previousElementSibling;
       }
-    }, 10);
+    }, 100);
   } else {
     textEl.textContent = msg.text || '';
   }
@@ -2562,6 +2564,8 @@ async function openProjectMeeting() {
   container.style.padding = '10px';
   container.style.alignContent = 'center';
 
+  window.meetingStartTime = Date.now();
+
   // 1. Get Local Stream
   try {
     projectLocalStream = await navigator.mediaDevices.getUserMedia({
@@ -2590,6 +2594,8 @@ window.closeMeetingOverlay = function () {
   const container = document.getElementById('meeting-container');
   if (overlay) overlay.classList.add('hidden');
 
+  const wasActive = !!projectLocalStream;
+
   // Cleanup Local
   if (projectLocalStream) {
     projectLocalStream.getTracks().forEach(t => t.stop());
@@ -2599,7 +2605,13 @@ window.closeMeetingOverlay = function () {
   // Check if I was the last one (before clearing peers)
   const wasLast = Object.keys(projectPeers).length === 0;
 
-  if (wasLast) {
+  // Safety: If meeting closed within 3 seconds of start, it might be a glitch or accidental.
+  // We suppress the "Meeting Ended" message in this case to prevent confusing users.
+  // Also, ONLY send ended if we were actually IN the meeting (wasActive).
+  const duration = Date.now() - (window.meetingStartTime || 0);
+  console.log(`❌ closeMeetingOverlay called. Duration: ${duration}ms, wasLast: ${wasLast}, wasActive: ${wasActive}`);
+
+  if (wasLast && duration > 3000 && wasActive) {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
         type: 'message',
@@ -2645,7 +2657,12 @@ function handleProjectRTC(data) {
     handleProjectOffer(fromId, data.sdp);
   } else if (action === 'answer') {
     if (pc) pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-    if (pc && data.candidate) pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+  } else if (action === 'candidate') {
+    if (pc && data.candidate) {
+      try {
+        pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+      } catch (e) { console.warn('ICE Add Error', e); }
+    }
   } else if (action === 'raise_hand') {
     updateRemoteHandStatus(fromId, data.raised);
   } else if (action === 'reaction') {
