@@ -342,19 +342,24 @@ async function loadChatWindow(type, id) {
     const statusClass = isOnline ? 'online' : 'offline';
     const statusText = isOnline ? '● Online' : '● Offline';
 
-    const mediaToggleBtn = '<button id="media-toggle-header-btn" title="Media" style="margin-left:6px;border:none;background:#e5e7eb;color:#111827;border-radius:6px;padding:6px 8px;cursor:pointer">🖼️</button>';
+    const mediaToggleBtn = '<button id="media-toggle-header-btn" title="Media" style="display:flex;align-items:center;justify-content:center;margin-left:6px;border:none;background:#e5e7eb;color:#374151;border-radius:8px;width:32px;height:32px;cursor:pointer;transition:all 0.2s"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></button>';
     let callBtns = '';
     if (type === 'user') {
       callBtns = `
         <div class="call-buttons">
-          <button id="voice-call-btn" class="call-btn" title="Voice Call">📞</button>
-          <button id="video-call-btn" class="call-btn" title="Video Call">📹</button>
+          <button id="voice-call-btn" class="call-btn" title="Voice Call" style="display:flex;align-items:center;justify-content:center;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </button>
+          <button id="video-call-btn" class="call-btn" title="Video Call" style="display:flex;align-items:center;justify-content:center;">
+             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          </button>
         </div>`;
     } else {
       callBtns = `
         <div class="call-buttons">
-          <button id="project-meeting-btn" style="background:#2563eb; color:white; border:none; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 1px 3px rgba(0,0,0,0.1); transition: all 0.2s">
-            <span>🎥</span> <span>Join Meeting</span>
+          <button id="project-meeting-btn" style="background:#2563eb; color:white; border:none; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px; box-shadow:0 1px 3px rgba(0,0,0,0.1); transition: all 0.2s">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            <span>Join Meeting</span>
           </button>
         </div>`;
     }
@@ -364,7 +369,9 @@ async function loadChatWindow(type, id) {
         <div class="chat-header-title">
           <h3>${escapeHtml(headerName)}</h3>
           <span class="connection-status ${statusClass}">${statusText}</span>
-          <button id="message-search-btn" style="margin-left:8px;border:none;background:#e5e7eb;color:#111827;border-radius:6px;padding:6px 8px;cursor:pointer">🔎</button>
+          <button id="message-search-btn" style="display:flex;align-items:center;justify-content:center;margin-left:8px;border:none;background:#e5e7eb;color:#374151;border-radius:8px;width:32px;height:32px;cursor:pointer;transition:all 0.2s">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
           ${mediaToggleBtn}
           ${callBtns}
         </div>
@@ -374,8 +381,13 @@ async function loadChatWindow(type, id) {
       <div class="message-input-area">
         <div class="input-wrapper">
           <textarea id="message-input" class="message-input" placeholder="Type a message..." rows="1"></textarea>
-          <button id="file-upload-btn" class="file-upload-btn" title="Upload file">📎</button>
-          <button id="send-btn" class="send-btn">Send</button>
+          <button id="file-upload-btn" class="file-upload-btn" title="Upload file" style="padding:0;width:40px;display:flex;align-items:center;justify-content:center">
+             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <button id="send-btn" class="send-btn">
+            <span>Send</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
         </div>
       </div>
     `;
