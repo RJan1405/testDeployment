@@ -1828,7 +1828,7 @@
               </svg>
             </span> Make Group
           </div>
-          <div class="menu-item" id="menu-set-avatar">
+          <!--<div class="menu-item" id="menu-set-avatar">
             <span class="menu-icon icon-blue">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1836,9 +1836,8 @@
                 <circle cx="12" cy="13" r="4" />
               </svg>
             </span> Set Profile Picture
-          </div>
+          </div>-->
           <input type="file" id="avatar-input" accept="image/*" style="display: none;" />
-
           <div class="menu-item" id="menu-host-meeting">
             <span class="menu-icon icon-green">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -1919,10 +1918,21 @@
 </div>
 
 <div id="profile-overlay" class="profile-overlay hidden">
-  <div class="profile-modal">
+  <div class="profile-modal" style="position: relative;">
     <button id="profile-close" class="profile-close">✕</button>
     <div class="profile-header">
-      <div id="profile-avatar" class="profile-avatar">U</div>
+      <div style="position:relative;">
+        <div id="profile-avatar" class="profile-avatar">U</div>
+        <!-- Edit Profile Picture Button (Hidden by default) -->
+        <button id="profile-edit-avatar-btn" title="Change Profile Picture"
+          style="display:none; position:absolute; bottom:0; right:0; background:var(--primary); border:2px solid white; border-radius:50%; width:24px; height:24px; align-items:center; justify-content:center; cursor:pointer; color:white; padding:0;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+            <circle cx="12" cy="13" r="4" />
+          </svg>
+        </button>
+      </div>
       <div>
         <div id="profile-name" class="profile-name">User Name</div>
         <div id="profile-username" class="profile-username">@username</div>
@@ -1933,6 +1943,8 @@
     <div class="profile-actions">
       <button id="profile-message" class="profile-btn">Message</button>
     </div>
+    <!-- Hidden File Input moved here -->
+    <input type="file" id="avatar-input" accept="image/*" style="display: none;" />
   </div>
 </div>
 

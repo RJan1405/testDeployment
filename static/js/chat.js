@@ -383,7 +383,7 @@ async function loadChatWindow(type, id) {
 
     chatWindow.innerHTML = `
       <div class="chat-header">
-        <div class="chat-header-title">
+        <div class="chat-header-title" ${type === 'user' ? `onclick="openMemberProfile(${id})" style="cursor:pointer;"` : ''}>
           ${headerAvatar}
           <h3>${escapeHtml(headerName)}</h3>
           <span class="connection-status ${statusClass}">${statusText}</span>
@@ -1826,6 +1826,30 @@ async function openMemberProfile(userId) {
   } catch (e) {
     if (nameEl) nameEl.textContent = 'Unable to load profile';
     if (usernameEl) usernameEl.textContent = '';
+  }
+
+  const editAvatarBtn = document.getElementById('profile-edit-avatar-btn');
+  const avatarInput = document.getElementById('avatar-input');
+
+  // Show/Hide Edit Button
+  if (editAvatarBtn) {
+    if (Number(userId) === Number(currentUserId)) {
+      editAvatarBtn.style.display = 'flex';
+      editAvatarBtn.onclick = () => {
+        if (avatarInput) avatarInput.click();
+      };
+      if (avatarInput) {
+        avatarInput.onchange = async (e) => {
+          if (e.target.files && e.target.files[0]) {
+            await uploadAvatar(e.target.files[0]);
+            // Refresh profile view
+            openMemberProfile(currentUserId);
+          }
+        };
+      }
+    } else {
+      editAvatarBtn.style.display = 'none';
+    }
   }
 
   const closeBtn = document.getElementById('profile-close');
@@ -3295,24 +3319,11 @@ function setupGroupCreationListeners() {
       e.stopPropagation();
       if (dropdown) dropdown.classList.remove('active');
       // For now, treat Host Meeting like creating a group to meet in
+      openGroupCreationModal();
     };
   }
 
-  const avatarItem = document.getElementById('menu-set-avatar');
-  const avatarInput = document.getElementById('avatar-input');
-  if (avatarItem && avatarInput) {
-    avatarItem.onclick = (e) => {
-      e.stopPropagation();
-      if (dropdown) dropdown.classList.remove('active');
-      avatarInput.click();
-    };
 
-    avatarInput.onchange = async (e) => {
-      if (e.target.files && e.target.files[0]) {
-        await uploadAvatar(e.target.files[0]);
-      }
-    };
-  }
 
   const settingsItem = document.getElementById('menu-settings');
   if (settingsItem) {
