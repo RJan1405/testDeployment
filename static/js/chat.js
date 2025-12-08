@@ -454,6 +454,7 @@ function displayChatInfoOnSidebar(type, id, chatName) {
 
   // Show/hide sections based on chat type
   if (type === 'project') {
+    // For group chats, show members by default (hide files and chat info)
     showRightSidebar();
     if (mainContainer) mainContainer.classList.remove('no-right-sidebar');
     chatInfoSection.style.display = 'none';
@@ -479,7 +480,7 @@ function displayChatInfoOnSidebar(type, id, chatName) {
     avatar.textContent = initials;
     name.textContent = chatName;
 
-    const metadataKey = `user_${id}`;
+    const metadataKey = `${type}_${id}`;
     const meta = chatMetadata.get(metadataKey) || {
       filesCount: 0,
       messageCount: 0,
@@ -490,7 +491,7 @@ function displayChatInfoOnSidebar(type, id, chatName) {
     messagesCount.textContent = `${meta.messageCount} message${meta.messageCount !== 1 ? 's' : ''}`;
 
     if (type === 'project') {
-      if (filesList) displaySharedFiles([]);
+      if (filesList) displaySharedFiles(meta.files || []);
     }
 
     console.log(`✅ Chat info displayed for ${chatName}:`, meta);
@@ -508,7 +509,7 @@ function displaySharedFiles(files) {
   filesList.innerHTML = '';
 
   if (!Array.isArray(files) || files.length === 0) {
-    filesList.innerHTML = '<div class="files-empty">📭 No files shared</div>';
+    filesList.innerHTML = '<div class="files-empty" style="display:flex; flex-direction:column; align-items:center; opacity:0.6;"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:8px;"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 2H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>No files shared</div>';
     return;
   }
 
@@ -531,6 +532,26 @@ function setupMediaToggle() {
     const membersList = document.getElementById('members-list');
     const mediaSection = document.getElementById('media-section');
 
+    // For group chats (project), toggle between members and media
+    if (currentChatType === 'project') {
+      const isMembersShowing = membersHeader && membersHeader.style.display !== 'none';
+
+      if (isMembersShowing) {
+        // Currently showing members, switch to media
+        if (membersHeader) membersHeader.style.display = 'none';
+        if (membersList) membersList.style.display = 'none';
+        if (mediaSection) mediaSection.style.display = 'flex';
+        await renderMediaGallery(currentChatType, currentChatId);
+      } else {
+        // Currently showing media, switch back to members
+        if (mediaSection) mediaSection.style.display = 'none';
+        if (membersHeader) membersHeader.style.display = 'flex';
+        if (membersList) membersList.style.display = '';
+      }
+      return;
+    }
+
+    // For 1-to-1 chats, toggle media view
     const isOpen = mediaSection && mediaSection.style.display !== 'none';
     if (isOpen) {
       if (mediaSection) mediaSection.style.display = 'none';
@@ -576,32 +597,29 @@ async function renderMediaGallery(type, id) {
 
   let files = [];
   try {
-    if (type === 'user') {
-      const key = `user_${id}`;
-      const meta = chatMetadata.get(key);
-      if (meta && Array.isArray(meta.files)) {
-        files = meta.files;
-      } else {
-        const url = `${API_BASE}/messages/user/${id}/`;
-        const res = await fetch(url, { headers: defaultHeaders() });
-        const messages = res.ok ? await res.json() : [];
-        files = messages.filter(m => m.file_url).map(m => ({
-          name: m.file_name || extractFileNameFromUrl(m.file_url),
-          url: m.file_url,
-          size: m.file_size || 0,
-          type: m.file_type || '',
-          timestamp: m.timestamp
-        }));
-      }
+    const key = `${type}_${id}`;
+    const meta = chatMetadata.get(key);
+
+    // Try to use cached files first for both user and project
+    if (meta && Array.isArray(meta.files) && meta.files.length > 0) {
+      files = meta.files;
     } else {
-      const url = `${API_BASE}/messages/project/${id}/`;
+      // Fallback to fetch if not in cache (or empty cache but maybe server has new?)
+      // Actually strictly relying on cache if populated is safer, but let's fetch if allow
+      let url = '';
+      if (type === 'user') {
+        url = `${API_BASE}/messages/user/${id}/`;
+      } else {
+        url = `${API_BASE}/messages/project/${id}/`;
+      }
+
       const res = await fetch(url, { headers: defaultHeaders() });
       const messages = res.ok ? await res.json() : [];
       files = messages.filter(m => m.file_url).map(m => ({
         name: m.file_name || extractFileNameFromUrl(m.file_url),
         url: m.file_url,
         size: m.file_size || 0,
-        type: m.file_type || '',
+        type: m.file_type || '', // Serializer doesn't provide this yet
         timestamp: m.timestamp
       }));
     }
@@ -631,7 +649,7 @@ function createMediaItem(file) {
   } else {
     const icon = document.createElement('div');
     icon.className = 'media-item-icon';
-    icon.textContent = getFileIcon(ext, fileName);
+    icon.innerHTML = getFileIcon(ext, fileName);
     div.appendChild(icon);
   }
 
@@ -661,7 +679,7 @@ function createFileItem(file) {
 
   const iconDiv = document.createElement('div');
   iconDiv.className = 'file-icon';
-  iconDiv.textContent = icon;
+  iconDiv.innerHTML = icon;
 
   const infoDiv = document.createElement('div');
   infoDiv.className = 'file-info';
@@ -679,7 +697,7 @@ function createFileItem(file) {
 
   const downloadBtn = document.createElement('button');
   downloadBtn.className = 'file-download';
-  downloadBtn.textContent = '⬇️';
+  downloadBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
   downloadBtn.title = 'Download file';
   downloadBtn.onclick = (e) => {
     e.stopPropagation();
@@ -706,19 +724,24 @@ function createFileItem(file) {
    ============================================================ */
 
 function getFileIcon(ext, fileName) {
-  const iconMap = {
-    'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'webp': '🖼️', 'bmp': '🖼️', 'svg': '🖼️',
-    'pdf': '📄', 'doc': '📝', 'docx': '📝', 'txt': '📄', 'rtf': '📝',
-    'xls': '📊', 'xlsx': '📊', 'csv': '📊',
-    'ppt': '🎯', 'pptx': '🎯',
-    'zip': '📦', 'rar': '📦', '7z': '📦', 'tar': '📦',
-    'mp3': '🎵', 'wav': '🎵', 'm4a': '🎵', 'aac': '🎵', 'flac': '🎵',
-    'mp4': '🎬', 'webm': '🎬', 'avi': '🎬', 'mov': '🎬', 'mkv': '🎬', 'flv': '🎬',
-    'js': '</>', 'py': '🐍', 'java': '☕', 'cpp': 'C++', 'c': 'C', 'html': '🌐', 'css': '🎨', 'json': '{}',
-    'default': '📁'
+  const s = (p) => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const map = {
+    img: s('<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>'),
+    doc: s('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>'),
+    zip: s('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>'),
+    aud: s('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'),
+    vid: s('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>'),
+    code: s('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'),
+    def: s('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>')
   };
 
-  return iconMap[ext] || iconMap['default'];
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) return map.img;
+  if (['pdf', 'doc', 'docx', 'txt', 'rtf', 'xls', 'xlsx', 'csv', 'ppt', 'pptx'].includes(ext)) return map.doc;
+  if (['zip', 'rar', '7z', 'tar'].includes(ext)) return map.zip;
+  if (['mp3', 'wav', 'm4a', 'aac', 'flac'].includes(ext)) return map.aud;
+  if (['mp4', 'webm', 'avi', 'mov', 'mkv', 'flv'].includes(ext)) return map.vid;
+  if (['js', 'py', 'java', 'cpp', 'c', 'html', 'css', 'json'].includes(ext)) return map.code;
+  return map.def;
 }
 
 /* ============================================================
@@ -3200,32 +3223,67 @@ function showFlyingReaction(userId, emoji) {
 
 function setupGroupCreationListeners() {
   console.log('init group creation listeners');
-  const openBtn = document.getElementById('create-group-btn');
+
+  // --- HEADER MENU LOGIC ---
+  const menuBtn = document.getElementById('header-menu-btn');
+  const dropdown = document.getElementById('header-menu-dropdown');
+
+  if (menuBtn && dropdown) {
+    menuBtn.onclick = (e) => {
+      e.stopPropagation();
+      dropdown.classList.toggle('active');
+    };
+
+    // Close on click outside
+    document.addEventListener('click', (e) => {
+      if (!dropdown.contains(e.target) && !menuBtn.contains(e.target)) {
+        dropdown.classList.remove('active');
+      }
+    });
+  }
+
+  // --- MENU ITEMS ---
+  const createGroupItem = document.getElementById('menu-create-group');
+  if (createGroupItem) {
+    createGroupItem.onclick = (e) => {
+      e.stopPropagation();
+      if (dropdown) dropdown.classList.remove('active');
+      openGroupCreationModal();
+    };
+  }
+
+  const hostMeetingItem = document.getElementById('menu-host-meeting');
+  if (hostMeetingItem) {
+    hostMeetingItem.onclick = (e) => {
+      e.stopPropagation();
+      if (dropdown) dropdown.classList.remove('active');
+      // For now, treat Host Meeting like creating a group to meet in
+      openGroupCreationModal();
+    };
+  }
+
+  const settingsItem = document.getElementById('menu-settings');
+  if (settingsItem) {
+    settingsItem.onclick = (e) => {
+      e.stopPropagation();
+      if (dropdown) dropdown.classList.remove('active');
+      if (currentUserId) openMemberProfile(currentUserId);
+    };
+  }
+
+  // --- GROUP CREATION OVERLAY LOGIC ---
   const overlay = document.getElementById('create-group-overlay');
   const closeBtn = document.getElementById('close-group-btn');
   const submitBtn = document.getElementById('submit-group-btn');
-
-  // New buttons
   const addUsersBtn = document.getElementById('group-add-users-btn');
 
+  // Support old button if it still exists (backwards compat or if partial deploy)
+  const openBtn = document.getElementById('create-group-btn');
   if (openBtn) {
-    console.log('Create Group Button found');
     openBtn.onclick = (e) => {
-      console.log('Create Group Button clicked');
       e.stopPropagation();
-      if (typeof openGroupCreationModal === 'function') {
-        openGroupCreationModal();
-      } else {
-        // Fallback if helper missing for some reason
-        if (overlay) {
-          overlay.classList.remove('hidden');
-          overlay.style.display = 'flex';
-          resetGroupCreationForm();
-        }
-      }
+      openGroupCreationModal();
     };
-  } else {
-    console.error('Create Group Button NOT found');
   }
 
   if (closeBtn) {
