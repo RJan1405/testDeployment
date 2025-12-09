@@ -2189,13 +2189,6 @@
   </div>
 </div>
 
-<<<<<<< HEAD
-{{ turn_config|json_script:"turn-config-data" }}
-<script>
-  window.TURN_CONFIG = JSON.parse(document.getElementById('turn-config-data').textContent);
-</script>
-<script src="{% static 'js/chat.js' %}"></script>
-=======
 <div id="avatar-preview-overlay" class="compose-overlay hidden"
   style="align-items:center; justify-content:center; background:rgba(0,0,0,0.85); z-index:2000;">
   <div style="position:relative; max-width:90vw; max-height:90vh;">
@@ -2206,8 +2199,11 @@
   </div>
 </div>
 
+{{ turn_config|json_script:"turn-config-data" }}
+<script>
+  window.TURN_CONFIG = JSON.parse(document.getElementById('turn-config-data').textContent);
+</script>
 <script src="{% static 'js/chat.js' %}?v={% now " U" %}"></script>
->>>>>>> exp/main
 <script src="{% static 'js/search.js' %}"></script>
 
 {% endblock %}

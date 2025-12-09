@@ -2869,13 +2869,9 @@ function handleProjectRTC(data) {
     if (pc) pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
   } else if (action === 'candidate') {
     if (pc && data.candidate) {
-<<<<<<< HEAD
-      try { pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch (e) { }
-=======
       try {
         pc.addIceCandidate(new RTCIceCandidate(data.candidate));
       } catch (e) { console.warn('ICE Add Error', e); }
->>>>>>> exp/main
     }
   } else if (action === 'raise_hand') {
     updateRemoteHandStatus(fromId, data.raised);
