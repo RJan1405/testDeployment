@@ -7,34 +7,34 @@
 <div class="login-container">
     <div class="login-box">
         <div class="login-header">
-            <h1>Teams Chat</h1>
+            <h1>Aexo</h1>
             <p>Sign In</p>
         </div>
 
         {% if messages %}
-            <div class="messages">
-                {% for message in messages %}
-                    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
-                {% endfor %}
-            </div>
+        <div class="messages">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
         {% endif %}
 
         {% if form.non_field_errors %}
-            <div class="error-message">
-                {% for error in form.non_field_errors %}
-                    <p>{{ error }}</p>
-                {% endfor %}
-            </div>
+        <div class="error-message">
+            {% for error in form.non_field_errors %}
+            <p>{{ error }}</p>
+            {% endfor %}
+        </div>
         {% endif %}
 
         <form method="post" class="login-form">
             {% csrf_token %}
-            
+
             <div class="form-group">
                 <label for="id_username">Username</label>
                 {{ form.username }}
                 {% if form.username.errors %}
-                    <span class="error">{{ form.username.errors.0 }}</span>
+                <span class="error">{{ form.username.errors.0 }}</span>
                 {% endif %}
             </div>
 
@@ -42,7 +42,7 @@
                 <label for="id_password">Password</label>
                 {{ form.password }}
                 {% if form.password.errors %}
-                    <span class="error">{{ form.password.errors.0 }}</span>
+                <span class="error">{{ form.password.errors.0 }}</span>
                 {% endif %}
             </div>
 
@@ -50,8 +50,8 @@
         </form>
 
         <div class="login-footer">
+            <p>Don't have an account? <a href="{% url 'signup' %}">Sign Up</a></p>
             <p>Need admin access? Go to <a href="{% url 'admin:index' %}">Django Admin</a></p>
-            <p class="note">Users are created by administrators only</p>
         </div>
     </div>
 </div>

@@ -1,0 +1,270 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Sign Up - Teams Chat{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-box">
+        <div class="login-header">
+            <h1>Aexo</h1>
+            <p>Create Account</p>
+        </div>
+
+        {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if form.non_field_errors %}
+        <div class="error-message">
+            {% for error in form.non_field_errors %}
+            <p>{{ error }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <form method="post" class="login-form">
+            {% csrf_token %}
+
+            <div class="name-row">
+                <div class="form-group">
+                    <label for="id_first_name">First Name</label>
+                    {{ form.first_name }}
+                    {% if form.first_name.errors %}
+                    <span class="error">{{ form.first_name.errors.0 }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label for="id_last_name">Last Name</label>
+                    {{ form.last_name }}
+                    {% if form.last_name.errors %}
+                    <span class="error">{{ form.last_name.errors.0 }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="id_username">Username</label>
+                {{ form.username }}
+                {% if form.username.errors %}
+                <span class="error">{{ form.username.errors.0 }}</span>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="id_email">Email</label>
+                {{ form.email }}
+                {% if form.email.errors %}
+                <span class="error">{{ form.email.errors.0 }}</span>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="id_password">Password</label>
+                {{ form.password }}
+                {% if form.password.errors %}
+                <span class="error">{{ form.password.errors.0 }}</span>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="id_confirm_password">Confirm Password</label>
+                {{ form.confirm_password }}
+                {% if form.confirm_password.errors %}
+                <span class="error">{{ form.confirm_password.errors.0 }}</span>
+                {% endif %}
+            </div>
+
+            <button type="submit" class="login-btn">Sign Up</button>
+        </form>
+
+        <div class="login-footer">
+            <p>Already have an account? <a href="{% url 'login' %}">Sign In</a></p>
+        </div>
+    </div>
+</div>
+
+<style>
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .login-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 20px;
+    }
+
+    .login-box {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        padding: 40px;
+        width: 100%;
+        max-width: 500px;
+        /* Increased to make it 'thick' */
+    }
+
+    .login-header {
+        text-align: center;
+        margin-bottom: 25px;
+        /* Reduced slightly */
+    }
+
+    .login-header h1 {
+        margin: 0 0 8px 0;
+        font-size: 28px;
+        color: #202020;
+    }
+
+    .login-header p {
+        margin: 0;
+        color: #605e5c;
+        font-size: 14px;
+    }
+
+    .messages {
+        margin-bottom: 20px;
+    }
+
+    .alert {
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        font-size: 13px;
+    }
+
+    .alert-error {
+        background-color: #fed7d7;
+        color: #742a2a;
+        border: 1px solid #feb2b2;
+    }
+
+    .alert-success {
+        background-color: #c6f6d5;
+        color: #22543d;
+        border: 1px solid #9ae6b4;
+    }
+
+    .error-message {
+        background-color: #fed7d7;
+        border: 1px solid #feb2b2;
+        color: #742a2a;
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        font-size: 13px;
+    }
+
+    .login-form {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        /* Reduced gap slightly */
+    }
+
+    .name-row {
+        display: flex;
+        gap: 16px;
+    }
+
+    .name-row .form-group {
+        flex: 1;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-group label {
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 6px;
+        color: #202020;
+    }
+
+    .form-group input {
+        padding: 10px 12px;
+        border: 1px solid #e1dfdd;
+        border-radius: 4px;
+        font-size: 13px;
+        font-family: inherit;
+        transition: border-color 0.2s;
+    }
+
+    .form-group input:focus {
+        outline: none;
+        border-color: #0078d4;
+        box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.1);
+    }
+
+    .form-group .error {
+        color: #d13438;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+
+    .login-btn {
+        padding: 10px 16px;
+        background-color: #0078d4;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        margin-top: 10px;
+    }
+
+    .login-btn:hover {
+        background-color: #106ebe;
+    }
+
+    .login-btn:active {
+        background-color: #005a9e;
+    }
+
+    .login-footer {
+        text-align: center;
+        margin-top: 25px;
+        /* Reduced slightly */
+        padding-top: 20px;
+        border-top: 1px solid #e1dfdd;
+    }
+
+    .login-footer p {
+        margin: 8px 0;
+        font-size: 12px;
+        color: #605e5c;
+    }
+
+    .login-footer a {
+        color: #0078d4;
+        text-decoration: none;
+    }
+
+    .login-footer a:hover {
+        text-decoration: underline;
+    }
+
+    .login-footer .note {
+        font-size: 11px;
+        font-style: italic;
+        color: #8a8886;
+    }
+</style>
+{% endblock %}

@@ -77,8 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.error('❌ User ID not found in page!');
   }
 
-  loadRecentChats();
-  loadProjects();
+  loadUnifiedChats();
   setupEventListeners();
 
   try {
@@ -91,31 +90,43 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ============================================================
-   RECENT CHATS (LEFT SIDEBAR) - CLEAN, NO METADATA
+   UNIFIED SIDEBAR (Recents + Projects)
    ============================================================ */
 
-async function loadRecentChats() {
+async function loadUnifiedChats() {
   try {
     const url = `${API_BASE}/messages/recent_chats/`;
     const res = await fetch(url, { headers: defaultHeaders() });
     if (!res.ok) throw new Error(`Status ${res.status}`);
-    const chats = await res.json();
+    const items = await res.json();
 
-    // Load chat metadata (for right sidebar display later)
-    for (const chat of chats) {
-      await loadChatMetadata('user', chat.user.id);
-    }
+    // Cache metadata maps immediately
+    items.forEach(item => {
+      const type = item.type;
+      const id = type === 'user' ? item.user.id : item.project.id;
+      const key = `${type}_${id}`;
+      if (!chatMetadata.has(key)) {
+        chatMetadata.set(key, {
+          filesCount: 0,
+          lastActivity: item.last_message_timestamp,
+          lastMessage: item.last_message,
+          messageCount: 0,
+          files: []
+        });
+      }
+    });
 
-    renderRecentChats(chats);
+    renderUnifiedChats(items);
   } catch (err) {
-    console.error('❌ Error loading recent chats:', err);
+    console.error('❌ Error loading chats:', err);
   }
 }
 
 async function loadChatMetadata(type, id) {
   try {
     const key = `${type}_${id}`;
-    if (chatMetadata.has(key)) return; // Already loaded
+    // If we have files, assume we loaded full metadata
+    if (chatMetadata.has(key) && chatMetadata.get(key).files.length > 0) return;
 
     let url = '';
     if (type === 'user') {
@@ -147,7 +158,6 @@ async function loadChatMetadata(type, id) {
         }
         if (msg.timestamp && (!lastActivityTime || new Date(msg.timestamp) > new Date(lastActivityTime))) {
           lastActivityTime = msg.timestamp;
-          // Clean text for preview
           if (msg.text === '[PROJECT_MEETING_INVITE]') lastMessageText = '🎥 Meeting Started';
           else if (msg.text === '[PROJECT_MEETING_ENDED]') lastMessageText = '🏁 Meeting Ended';
           else lastMessageText = msg.text || (msg.file_url ? '📎 Attachment' : '');
@@ -163,17 +173,10 @@ async function loadChatMetadata(type, id) {
       files: files
     });
 
-    console.log(`✅ Chat metadata loaded for ${type} ${id}:`, chatMetadata.get(key));
-
-    // Trigger re-render if needed
+    // Update preview if element specifically exists for projects
     if (type === 'project') {
-      const pList = document.getElementById('projects-list');
-      // We can't easily find the specific element without ID, but we can re-render if we want, 
-      // or just update if we had IDs. For now, calling renderProjects again might be heavy, 
-      // so we just let the next render pick it up, or rely on initial load.
-      // Better: update specific item if possible.
       const previewEl = document.getElementById(`project-preview-${id}`);
-      if (previewEl) previewEl.textContent = lastMessageText || 'No messages';
+      if (previewEl && lastMessageText) previewEl.textContent = lastMessageText;
     }
 
   } catch (err) {
@@ -181,119 +184,104 @@ async function loadChatMetadata(type, id) {
   }
 }
 
-function renderRecentChats(chats) {
-  const container = document.getElementById('recent-chats');
+function renderUnifiedChats(items) {
+  const container = document.getElementById('all-chats-list');
   if (!container) return;
 
   container.innerHTML = '';
-  if (!Array.isArray(chats) || chats.length === 0) {
-    container.innerHTML = '<p class="empty-state">No recent chats</p>';
+  if (!Array.isArray(items) || items.length === 0) {
+    container.innerHTML = '<p class="empty-state">No conversations</p>';
     return;
   }
 
-  chats.sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
-  chats.forEach(chat => container.appendChild(createChatItem(chat)));
+  items.forEach(item => {
+    if (item.type === 'user' && item.user) {
+      container.appendChild(createUnifiedUserItem(item));
+    } else if (item.type === 'project' && item.project) {
+      container.appendChild(createUnifiedProjectItem(item));
+    }
+  });
 }
 
-function createChatItem(chat) {
+function createUnifiedUserItem(item) {
   const div = document.createElement('div');
   div.className = 'chat-item';
   div.tabIndex = 0;
-  div.onclick = () => openChat('user', chat.user.id);
+  div.onclick = () => openChat('user', item.user.id);
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = (chat.user.first_name?.[0] || chat.user.username?.[0] || 'U').toUpperCase();
+  const avatarUrl = item.user.profile?.avatar;
+  if (avatarUrl) {
+    // Determine full URL (if relative, prepend origin or rely on browser)
+    // The backend serializer usually returns absolute or relative URL.
+    avatar.style.backgroundImage = `url('${avatarUrl}')`;
+    avatar.style.backgroundSize = 'cover';
+    avatar.style.backgroundPosition = 'center';
+    avatar.textContent = '';
+  } else {
+    avatar.textContent = (item.user.first_name?.[0] || item.user.username?.[0] || 'U').toUpperCase();
+  }
 
   const info = document.createElement('div');
   info.className = 'chat-info';
 
   const name = document.createElement('div');
   name.className = 'chat-name';
-  name.textContent = chat.user.first_name ? `${chat.user.first_name} ${chat.user.last_name}` : chat.user.username;
+  name.textContent = item.user.first_name ? `${item.user.first_name} ${item.user.last_name}` : item.user.username;
 
   const preview = document.createElement('div');
   preview.className = 'chat-preview';
-  preview.textContent = chat.last_message || '(No messages)';
+  preview.textContent = item.last_message || '(No messages)';
 
   info.appendChild(name);
   info.appendChild(preview);
   div.appendChild(avatar);
   div.appendChild(info);
 
-  if (chat.unread_count && chat.unread_count > 0) {
+  if (item.unread_count > 0) {
     const badge = document.createElement('div');
     badge.className = 'unread-badge';
-    badge.textContent = chat.unread_count;
-    badge.dataset.forUser = chat.user.id;
+    badge.textContent = item.unread_count;
+    badge.dataset.forUser = item.user.id;
     div.appendChild(badge);
   }
 
   return div;
 }
 
-/* ============================================================
-   PROJECTS (LEFT SIDEBAR)
-   ============================================================ */
-
-async function loadProjects() {
-  try {
-    const url = `${API_BASE}/projects/`;
-    const res = await fetch(url, { headers: defaultHeaders() });
-    if (!res.ok) throw new Error(`Status ${res.status}`);
-    const projects = await res.json();
-
-    // Load metadata for projects
-    for (const p of projects) {
-      await loadChatMetadata('project', p.id);
-    }
-
-    renderProjects(projects);
-  } catch (err) {
-    console.error('❌ Error loading projects:', err);
-  }
-}
-
-function renderProjects(projects) {
-  const container = document.getElementById('projects-list');
-  if (!container) return;
-
-  container.innerHTML = '';
-  if (!Array.isArray(projects) || projects.length === 0) {
-    container.innerHTML = '<p class="empty-state">No projects</p>';
-    return;
-  }
-
-  projects.forEach(project => container.appendChild(createProjectItem(project)));
-}
-
-function createProjectItem(project) {
+function createUnifiedProjectItem(item) {
   const div = document.createElement('div');
   div.className = 'chat-item';
-  div.onclick = () => openChat('project', project.id);
+  div.onclick = () => openChat('project', item.project.id);
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar project-avatar';
-  avatar.textContent = (project.name?.[0] || 'P').toUpperCase();
+  avatar.textContent = (item.project.name?.[0] || 'P').toUpperCase();
 
   const info = document.createElement('div');
   info.className = 'chat-info';
 
   const name = document.createElement('div');
   name.className = 'chat-name';
-  name.textContent = project.name;
+  name.textContent = item.project.name;
 
   const preview = document.createElement('div');
   preview.className = 'chat-preview';
-  preview.id = `project-preview-${project.id}`;
-
-  const meta = chatMetadata.get(`project_${project.id}`);
-  preview.textContent = meta?.lastMessage || `${project.members?.length || 0} members`;
+  preview.id = `project-preview-${item.project.id}`;
+  preview.textContent = item.last_message || 'No messages';
 
   info.appendChild(name);
   info.appendChild(preview);
   div.appendChild(avatar);
   div.appendChild(info);
+
+  if (item.unread_count > 0) {
+    const badge = document.createElement('div');
+    badge.className = 'unread-badge';
+    badge.textContent = item.unread_count;
+    div.appendChild(badge);
+  }
 
   return div;
 }
@@ -344,12 +332,14 @@ async function loadChatWindow(type, id) {
     let endpoint = '';
     let headerName = '';
     let isOnline = false;
+    let avatarUrl = null;
 
     if (type === 'user') {
       endpoint = `${API_BASE}/messages/user/${id}/`;
       const user = await (await fetch(`${API_BASE}/users/${id}/`, { headers: defaultHeaders() })).json();
       headerName = user.first_name ? `${user.first_name} ${user.last_name}` : user.username;
       isOnline = !!(user.profile && user.profile.is_online);
+      if (user.profile && user.profile.avatar) avatarUrl = user.profile.avatar;
     } else {
       endpoint = `${API_BASE}/messages/project/${id}/`;
       const project = await (await fetch(`${API_BASE}/projects/${id}/`, { headers: defaultHeaders() })).json();
@@ -364,29 +354,50 @@ async function loadChatWindow(type, id) {
     const statusClass = isOnline ? 'online' : 'offline';
     const statusText = isOnline ? '● Online' : '● Offline';
 
-    const mediaToggleBtn = '<button id="media-toggle-header-btn" title="Media" style="margin-left:6px;border:none;background:#e5e7eb;color:#111827;border-radius:6px;padding:6px 8px;cursor:pointer">🖼️</button>';
+    const mediaToggleBtn = '<button id="media-toggle-header-btn" title="Media" style="display:flex;align-items:center;justify-content:center;margin-left:6px;border:none;background:#e5e7eb;color:#374151;border-radius:8px;width:32px;height:32px;cursor:pointer;transition:all 0.2s"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></button>';
     let callBtns = '';
     if (type === 'user') {
       callBtns = `
         <div class="call-buttons">
-          <button id="voice-call-btn" class="call-btn" title="Voice Call">📞</button>
-          <button id="video-call-btn" class="call-btn" title="Video Call">📹</button>
+          <button id="voice-call-btn" class="call-btn" title="Voice Call" style="display:flex;align-items:center;justify-content:center;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </button>
+          <button id="video-call-btn" class="call-btn" title="Video Call" style="display:flex;align-items:center;justify-content:center;">
+             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          </button>
         </div>`;
     } else {
       callBtns = `
         <div class="call-buttons">
-          <button id="project-meeting-btn" style="background:#2563eb; color:white; border:none; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 1px 3px rgba(0,0,0,0.1); transition: all 0.2s">
-            <span>🎥</span> <span>Join Meeting</span>
+          <button id="project-meeting-btn" style="background:#2563eb; color:white; border:none; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px; box-shadow:0 1px 3px rgba(0,0,0,0.1); transition: all 0.2s">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            <span>Join Meeting</span>
           </button>
         </div>`;
     }
 
+    let headerAvatar = '';
+    if (avatarUrl) {
+      headerAvatar = `<img src="${avatarUrl}" style="width:32px; height:32px; border-radius:50%; margin-right:8px; object-fit:cover;">`;
+    } else {
+      // Default avatar with initials
+      const initials = (headerName.split(' ').map(n => n[0]).join('') || headerName[0] || '?').substring(0, 2).toUpperCase();
+      headerAvatar = `
+        <div style="width:32px; height:32px; border-radius:50%; margin-right:8px; background:linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); color:white; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; border:1px solid #1e40af;">
+          ${initials}
+        </div>
+      `;
+    }
+
     chatWindow.innerHTML = `
       <div class="chat-header">
-        <div class="chat-header-title">
+        <div class="chat-header-title" ${type === 'user' ? `onclick="openMemberProfile(${id})" style="cursor:pointer;"` : ''}>
+          ${headerAvatar}
           <h3>${escapeHtml(headerName)}</h3>
           <span class="connection-status ${statusClass}">${statusText}</span>
-          <button id="message-search-btn" style="margin-left:8px;border:none;background:#e5e7eb;color:#111827;border-radius:6px;padding:6px 8px;cursor:pointer">🔎</button>
+          <button id="message-search-btn" style="display:flex;align-items:center;justify-content:center;margin-left:8px;border:none;background:#e5e7eb;color:#374151;border-radius:8px;width:32px;height:32px;cursor:pointer;transition:all 0.2s">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
           ${mediaToggleBtn}
           ${callBtns}
         </div>
@@ -396,8 +407,13 @@ async function loadChatWindow(type, id) {
       <div class="message-input-area">
         <div class="input-wrapper">
           <textarea id="message-input" class="message-input" placeholder="Type a message..." rows="1"></textarea>
-          <button id="file-upload-btn" class="file-upload-btn" title="Upload file">📎</button>
-          <button id="send-btn" class="send-btn">Send</button>
+          <button id="file-upload-btn" class="file-upload-btn" title="Upload file" style="padding:0;width:40px;display:flex;align-items:center;justify-content:center">
+             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <button id="send-btn" class="send-btn">
+            <span>Send</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
         </div>
       </div>
     `;
@@ -464,6 +480,7 @@ function displayChatInfoOnSidebar(type, id, chatName) {
 
   // Show/hide sections based on chat type
   if (type === 'project') {
+    // For group chats, show members by default (hide files and chat info)
     showRightSidebar();
     if (mainContainer) mainContainer.classList.remove('no-right-sidebar');
     chatInfoSection.style.display = 'none';
@@ -489,7 +506,7 @@ function displayChatInfoOnSidebar(type, id, chatName) {
     avatar.textContent = initials;
     name.textContent = chatName;
 
-    const metadataKey = `user_${id}`;
+    const metadataKey = `${type}_${id}`;
     const meta = chatMetadata.get(metadataKey) || {
       filesCount: 0,
       messageCount: 0,
@@ -500,7 +517,7 @@ function displayChatInfoOnSidebar(type, id, chatName) {
     messagesCount.textContent = `${meta.messageCount} message${meta.messageCount !== 1 ? 's' : ''}`;
 
     if (type === 'project') {
-      if (filesList) displaySharedFiles([]);
+      if (filesList) displaySharedFiles(meta.files || []);
     }
 
     console.log(`✅ Chat info displayed for ${chatName}:`, meta);
@@ -518,7 +535,7 @@ function displaySharedFiles(files) {
   filesList.innerHTML = '';
 
   if (!Array.isArray(files) || files.length === 0) {
-    filesList.innerHTML = '<div class="files-empty">📭 No files shared</div>';
+    filesList.innerHTML = '<div class="files-empty" style="display:flex; flex-direction:column; align-items:center; opacity:0.6;"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:8px;"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 2H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>No files shared</div>';
     return;
   }
 
@@ -541,6 +558,26 @@ function setupMediaToggle() {
     const membersList = document.getElementById('members-list');
     const mediaSection = document.getElementById('media-section');
 
+    // For group chats (project), toggle between members and media
+    if (currentChatType === 'project') {
+      const isMembersShowing = membersHeader && membersHeader.style.display !== 'none';
+
+      if (isMembersShowing) {
+        // Currently showing members, switch to media
+        if (membersHeader) membersHeader.style.display = 'none';
+        if (membersList) membersList.style.display = 'none';
+        if (mediaSection) mediaSection.style.display = 'flex';
+        await renderMediaGallery(currentChatType, currentChatId);
+      } else {
+        // Currently showing media, switch back to members
+        if (mediaSection) mediaSection.style.display = 'none';
+        if (membersHeader) membersHeader.style.display = 'flex';
+        if (membersList) membersList.style.display = '';
+      }
+      return;
+    }
+
+    // For 1-to-1 chats, toggle media view
     const isOpen = mediaSection && mediaSection.style.display !== 'none';
     if (isOpen) {
       if (mediaSection) mediaSection.style.display = 'none';
@@ -586,32 +623,29 @@ async function renderMediaGallery(type, id) {
 
   let files = [];
   try {
-    if (type === 'user') {
-      const key = `user_${id}`;
-      const meta = chatMetadata.get(key);
-      if (meta && Array.isArray(meta.files)) {
-        files = meta.files;
-      } else {
-        const url = `${API_BASE}/messages/user/${id}/`;
-        const res = await fetch(url, { headers: defaultHeaders() });
-        const messages = res.ok ? await res.json() : [];
-        files = messages.filter(m => m.file_url).map(m => ({
-          name: m.file_name || extractFileNameFromUrl(m.file_url),
-          url: m.file_url,
-          size: m.file_size || 0,
-          type: m.file_type || '',
-          timestamp: m.timestamp
-        }));
-      }
+    const key = `${type}_${id}`;
+    const meta = chatMetadata.get(key);
+
+    // Try to use cached files first for both user and project
+    if (meta && Array.isArray(meta.files) && meta.files.length > 0) {
+      files = meta.files;
     } else {
-      const url = `${API_BASE}/messages/project/${id}/`;
+      // Fallback to fetch if not in cache (or empty cache but maybe server has new?)
+      // Actually strictly relying on cache if populated is safer, but let's fetch if allow
+      let url = '';
+      if (type === 'user') {
+        url = `${API_BASE}/messages/user/${id}/`;
+      } else {
+        url = `${API_BASE}/messages/project/${id}/`;
+      }
+
       const res = await fetch(url, { headers: defaultHeaders() });
       const messages = res.ok ? await res.json() : [];
       files = messages.filter(m => m.file_url).map(m => ({
         name: m.file_name || extractFileNameFromUrl(m.file_url),
         url: m.file_url,
         size: m.file_size || 0,
-        type: m.file_type || '',
+        type: m.file_type || '', // Serializer doesn't provide this yet
         timestamp: m.timestamp
       }));
     }
@@ -641,7 +675,7 @@ function createMediaItem(file) {
   } else {
     const icon = document.createElement('div');
     icon.className = 'media-item-icon';
-    icon.textContent = getFileIcon(ext, fileName);
+    icon.innerHTML = getFileIcon(ext, fileName);
     div.appendChild(icon);
   }
 
@@ -671,7 +705,7 @@ function createFileItem(file) {
 
   const iconDiv = document.createElement('div');
   iconDiv.className = 'file-icon';
-  iconDiv.textContent = icon;
+  iconDiv.innerHTML = icon;
 
   const infoDiv = document.createElement('div');
   infoDiv.className = 'file-info';
@@ -689,7 +723,7 @@ function createFileItem(file) {
 
   const downloadBtn = document.createElement('button');
   downloadBtn.className = 'file-download';
-  downloadBtn.textContent = '⬇️';
+  downloadBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
   downloadBtn.title = 'Download file';
   downloadBtn.onclick = (e) => {
     e.stopPropagation();
@@ -716,19 +750,24 @@ function createFileItem(file) {
    ============================================================ */
 
 function getFileIcon(ext, fileName) {
-  const iconMap = {
-    'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'webp': '🖼️', 'bmp': '🖼️', 'svg': '🖼️',
-    'pdf': '📄', 'doc': '📝', 'docx': '📝', 'txt': '📄', 'rtf': '📝',
-    'xls': '📊', 'xlsx': '📊', 'csv': '📊',
-    'ppt': '🎯', 'pptx': '🎯',
-    'zip': '📦', 'rar': '📦', '7z': '📦', 'tar': '📦',
-    'mp3': '🎵', 'wav': '🎵', 'm4a': '🎵', 'aac': '🎵', 'flac': '🎵',
-    'mp4': '🎬', 'webm': '🎬', 'avi': '🎬', 'mov': '🎬', 'mkv': '🎬', 'flv': '🎬',
-    'js': '</>', 'py': '🐍', 'java': '☕', 'cpp': 'C++', 'c': 'C', 'html': '🌐', 'css': '🎨', 'json': '{}',
-    'default': '📁'
+  const s = (p) => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const map = {
+    img: s('<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>'),
+    doc: s('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>'),
+    zip: s('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>'),
+    aud: s('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'),
+    vid: s('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>'),
+    code: s('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'),
+    def: s('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>')
   };
 
-  return iconMap[ext] || iconMap['default'];
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) return map.img;
+  if (['pdf', 'doc', 'docx', 'txt', 'rtf', 'xls', 'xlsx', 'csv', 'ppt', 'pptx'].includes(ext)) return map.doc;
+  if (['zip', 'rar', '7z', 'tar'].includes(ext)) return map.zip;
+  if (['mp3', 'wav', 'm4a', 'aac', 'flac'].includes(ext)) return map.aud;
+  if (['mp4', 'webm', 'avi', 'mov', 'mkv', 'flv'].includes(ext)) return map.vid;
+  if (['js', 'py', 'java', 'cpp', 'c', 'html', 'css', 'json'].includes(ext)) return map.code;
+  return map.def;
 }
 
 /* ============================================================
@@ -847,6 +886,114 @@ function createMessageElement(msg) {
     inviteCard.appendChild(title);
     inviteCard.appendChild(joinBtn);
     textEl.appendChild(inviteCard);
+  } else if (msg.text && msg.text.includes('[MEETING_INVITE]')) {
+    let payload = { title: 'New Meeting', id: '' };
+    try {
+      const marker = '[MEETING_INVITE]';
+      const jsonStr = msg.text.substring(msg.text.indexOf(marker) + marker.length);
+      payload = JSON.parse(jsonStr);
+    } catch (e) {
+      console.error('Failed to parse meeting invite:', e);
+    }
+
+    const inviteCard = document.createElement('div');
+    inviteCard.className = 'meeting-invite-card';
+    inviteCard.dataset.meetingId = payload.id;
+    inviteCard.style.padding = '12px';
+    inviteCard.style.borderRadius = '8px';
+    inviteCard.style.marginTop = '4px';
+
+    // Check status from serializer or default to active
+    const isEnded = (msg.meeting_status === 'ended');
+
+    if (isEnded) {
+      inviteCard.style.background = '#f3f4f6';
+      inviteCard.style.border = '1px solid #d1d5db';
+      inviteCard.classList.add('ended');
+    } else {
+      inviteCard.style.background = '#e0f2fe';
+      inviteCard.style.border = '1px solid #7dd3fc';
+    }
+
+    const title = document.createElement('div');
+    title.innerHTML = `<strong>🎥 ${escapeHtml(payload.title)}</strong><br><small>Hosted by ${escapeHtml(payload.host || 'User')}</small>`;
+    title.style.marginBottom = '8px';
+    title.style.fontSize = '14px';
+    title.style.color = isEnded ? '#6b7280' : '#0c4a6e';
+
+    const joinBtn = document.createElement('button');
+    joinBtn.style.border = 'none';
+    joinBtn.style.padding = '8px 16px';
+    joinBtn.style.borderRadius = '6px';
+    joinBtn.style.fontWeight = '600';
+
+    if (isEnded) {
+      joinBtn.textContent = 'Meeting Ended';
+      joinBtn.style.background = '#9ca3af';
+      joinBtn.style.color = 'white';
+      joinBtn.style.cursor = 'not-allowed';
+      joinBtn.disabled = true;
+    } else {
+      joinBtn.textContent = 'Join Meeting';
+      joinBtn.style.background = '#0284c7';
+      joinBtn.style.color = 'white';
+      joinBtn.style.cursor = 'pointer';
+      joinBtn.onclick = () => {
+        window.location.href = `/chat/meeting/${payload.id}/`;
+      };
+    }
+
+    inviteCard.appendChild(title);
+    inviteCard.appendChild(joinBtn);
+    textEl.appendChild(inviteCard);
+
+  } else if (msg.text && msg.text.includes('[MEETING_ENDED]')) {
+    let payload = {};
+    try {
+      const marker = '[MEETING_ENDED]';
+      const jsonStr = msg.text.substring(msg.text.indexOf(marker) + marker.length);
+      payload = JSON.parse(jsonStr);
+    } catch (e) { }
+
+    const endCard = document.createElement('div');
+    endCard.style.padding = '8px 12px';
+    endCard.style.background = '#f3f4f6';
+    endCard.style.border = '1px solid #d1d5db';
+    endCard.style.borderRadius = '8px';
+    endCard.style.color = '#6b7280';
+    endCard.style.fontSize = '13px';
+    endCard.style.fontWeight = '500';
+    endCard.style.display = 'flex';
+    endCard.style.alignItems = 'center';
+    endCard.style.gap = '8px';
+    endCard.innerHTML = '<span>🏁</span> <span>Meeting has ended</span>';
+    textEl.appendChild(endCard);
+
+    // Disable specific meeting card in this chat history
+    const disableCard = () => {
+      if (!payload.id) return;
+      const container = document.getElementById('messages-container');
+      if (container) {
+        const invites = container.querySelectorAll(`.meeting-invite-card[data-meeting-id="${payload.id}"]`);
+        invites.forEach(invite => {
+          if (invite.classList.contains('ended')) return;
+          invite.classList.add('ended');
+          const btn = invite.querySelector('button');
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Meeting Ended';
+            btn.style.background = '#9ca3af';
+            btn.style.cursor = 'not-allowed';
+            btn.onclick = null;
+          }
+        });
+      }
+    };
+
+    // Run immediately and after a delay to catch race conditions during load
+    setTimeout(disableCard, 0);
+    setTimeout(disableCard, 500);
+
   } else if (msg.text === '[PROJECT_MEETING_ENDED]') {
     const endCard = document.createElement('div');
     endCard.style.padding = '8px 12px';
@@ -862,24 +1009,26 @@ function createMessageElement(msg) {
     endCard.innerHTML = '<span>🏁</span> <span>Video meeting ended</span>';
     textEl.appendChild(endCard);
 
-    // Disable the last invite card
+    // Disable the nearest previous invite card
     setTimeout(() => {
-      const container = document.getElementById('messages-container');
-      if (container) {
-        const invites = container.querySelectorAll('.meeting-invite-card:not(.ended)');
-        if (invites.length > 0) {
-          const last = invites[invites.length - 1];
-          last.classList.add('ended');
-          const btn = last.querySelector('button');
+      if (!div.parentElement) return;
+      let prev = div.previousElementSibling;
+      while (prev) {
+        const invite = prev.querySelector('.meeting-invite-card:not(.ended)');
+        if (invite) {
+          invite.classList.add('ended');
+          const btn = invite.querySelector('button');
           if (btn) {
             btn.disabled = true;
             btn.textContent = 'Meeting Ended';
             btn.style.background = '#9ca3af';
             btn.style.cursor = 'not-allowed';
           }
+          break; // Stop after disabling the most recent previous invite
         }
+        prev = prev.previousElementSibling;
       }
-    }, 10);
+    }, 100);
   } else {
     textEl.textContent = msg.text || '';
   }
@@ -1610,7 +1759,9 @@ async function loadProjectMembers(projectId) {
           username: member.username,
           first_name: member.first_name,
           last_name: member.last_name,
-          is_online: member.profile?.is_online || false
+
+          is_online: member.profile?.is_online || false,
+          avatar: member.profile?.avatar || null
         });
       });
     }
@@ -1674,7 +1825,18 @@ function createMemberItem(member) {
   const initials = member.first_name
     ? member.first_name[0].toUpperCase() + (member.last_name?.[0]?.toUpperCase() || '')
     : member.username[0].toUpperCase();
-  avatar.textContent = initials;
+
+  if (member.avatar) {
+    const img = document.createElement('img');
+    img.src = member.avatar;
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    img.style.borderRadius = '50%';
+    avatar.appendChild(img);
+  } else {
+    avatar.textContent = initials;
+  }
 
   const badge = document.createElement('div');
   badge.className = `status-badge ${member.is_online ? 'online' : ''}`;
@@ -1772,6 +1934,8 @@ async function openMemberProfile(userId) {
       if (user.profile && user.profile.avatar) {
         const img = document.createElement('img');
         img.src = user.profile.avatar;
+        img.style.cursor = 'pointer';
+        img.onclick = () => openAvatarPreview(user.profile.avatar);
         avatarEl.appendChild(img);
       } else {
         avatarEl.textContent = initials;
@@ -1795,9 +1959,58 @@ async function openMemberProfile(userId) {
     if (usernameEl) usernameEl.textContent = '';
   }
 
+  const editAvatarBtn = document.getElementById('profile-edit-avatar-btn');
+  const avatarInput = document.getElementById('avatar-input');
+
+  // Show/Hide Edit Button
+  if (editAvatarBtn) {
+    if (Number(userId) === Number(currentUserId)) {
+      editAvatarBtn.style.display = 'flex';
+      editAvatarBtn.onclick = () => {
+        if (avatarInput) avatarInput.click();
+      };
+      if (avatarInput) {
+        avatarInput.onchange = async (e) => {
+          if (e.target.files && e.target.files[0]) {
+            await uploadAvatar(e.target.files[0]);
+            // Refresh profile view
+            openMemberProfile(currentUserId);
+          }
+        };
+      }
+    } else {
+      editAvatarBtn.style.display = 'none';
+    }
+  }
+
   const closeBtn = document.getElementById('profile-close');
   if (closeBtn) closeBtn.onclick = closeProfileModal;
   overlay.onclick = (evt) => { if (evt.target === overlay) closeProfileModal(); };
+}
+
+function openAvatarPreview(url) {
+  const overlay = document.getElementById('avatar-preview-overlay');
+  const img = document.getElementById('avatar-preview-img');
+  const closeBtn = document.getElementById('avatar-preview-close');
+
+  if (overlay && img) {
+    img.src = url;
+    overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
+
+    if (closeBtn) closeBtn.onclick = closeAvatarPreview;
+    overlay.onclick = (e) => {
+      if (e.target === overlay) closeAvatarPreview();
+    };
+  }
+}
+
+function closeAvatarPreview() {
+  const overlay = document.getElementById('avatar-preview-overlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+    overlay.style.display = 'none';
+  }
 }
 
 function closeProfileModal() {
@@ -2313,6 +2526,7 @@ function setupEventListeners() {
   setupMediaToggle();
   setupNewChatButton();
   setupCallButtons();
+  setupGroupCreationListeners();
 
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('#new-chat-btn');
@@ -2558,6 +2772,8 @@ async function openProjectMeeting() {
   container.style.padding = '10px';
   container.style.alignContent = 'center';
 
+  window.meetingStartTime = Date.now();
+
   // 1. Get Local Stream
   try {
     projectLocalStream = await navigator.mediaDevices.getUserMedia({
@@ -2586,6 +2802,8 @@ window.closeMeetingOverlay = function () {
   const container = document.getElementById('meeting-container');
   if (overlay) overlay.classList.add('hidden');
 
+  const wasActive = !!projectLocalStream;
+
   // Cleanup Local
   if (projectLocalStream) {
     projectLocalStream.getTracks().forEach(t => t.stop());
@@ -2595,13 +2813,21 @@ window.closeMeetingOverlay = function () {
   // Check if I was the last one (before clearing peers)
   const wasLast = Object.keys(projectPeers).length === 0;
 
-  if (wasLast) {
+  // Safety: We suppress the "Meeting Ended" message if the user wasn't actually active (no stream),
+  // which prevents ghost/glitch endings.
+  // We removed the duration check because if a user manually clicks End quickly, they expect it to end.
+  console.log(`❌ closeMeetingOverlay checks: wasLast=${wasLast}, wasActive=${wasActive}`);
+
+  if (wasLast && wasActive) {
     if (ws && ws.readyState === WebSocket.OPEN) {
+      console.log('✅ Sending [PROJECT_MEETING_ENDED]');
       ws.send(JSON.stringify({
         type: 'message',
         project_id: currentChatId,
         text: '[PROJECT_MEETING_ENDED]'
       }));
+    } else {
+      console.warn('❌ WS not open, cannot send Ended message');
     }
   }
 
@@ -2643,7 +2869,13 @@ function handleProjectRTC(data) {
     if (pc) pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
   } else if (action === 'candidate') {
     if (pc && data.candidate) {
+<<<<<<< HEAD
       try { pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch (e) { }
+=======
+      try {
+        pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+      } catch (e) { console.warn('ICE Add Error', e); }
+>>>>>>> exp/main
     }
   } else if (action === 'raise_hand') {
     updateRemoteHandStatus(fromId, data.raised);
@@ -3211,3 +3443,512 @@ function showFlyingReaction(userId, emoji) {
 }
 
 
+
+/* ============================================================
+   GROUP CREATION LOGIC
+   ============================================================ */
+
+/* ============================================================
+   GROUP CREATION LOGIC
+   ============================================================ */
+
+function setupGroupCreationListeners() {
+  console.log('init group creation listeners');
+
+  // --- HEADER MENU LOGIC ---
+  const menuBtn = document.getElementById('header-menu-btn');
+  const dropdown = document.getElementById('header-menu-dropdown');
+
+  if (menuBtn && dropdown) {
+    menuBtn.onclick = (e) => {
+      e.stopPropagation();
+      dropdown.classList.toggle('active');
+    };
+
+    // Close on click outside
+    document.addEventListener('click', (e) => {
+      if (!dropdown.contains(e.target) && !menuBtn.contains(e.target)) {
+        dropdown.classList.remove('active');
+      }
+    });
+  }
+
+  // --- MENU ITEMS ---
+  const createGroupItem = document.getElementById('menu-create-group');
+  if (createGroupItem) {
+    createGroupItem.onclick = (e) => {
+      e.stopPropagation();
+      if (dropdown) dropdown.classList.remove('active');
+      openGroupCreationModal();
+    };
+  }
+
+
+
+
+
+  const settingsItem = document.getElementById('menu-settings');
+  if (settingsItem) {
+    settingsItem.onclick = (e) => {
+      e.stopPropagation();
+      if (dropdown) dropdown.classList.remove('active');
+      if (currentUserId) openMemberProfile(currentUserId);
+    };
+  }
+
+  // --- GROUP CREATION OVERLAY LOGIC ---
+  const overlay = document.getElementById('create-group-overlay');
+  const closeBtn = document.getElementById('close-group-btn');
+  const submitBtn = document.getElementById('submit-group-btn');
+  const addUsersBtn = document.getElementById('group-add-users-btn');
+
+  // Support old button if it still exists (backwards compat or if partial deploy)
+  const openBtn = document.getElementById('create-group-btn');
+  if (openBtn) {
+    openBtn.onclick = (e) => {
+      e.stopPropagation();
+      openGroupCreationModal();
+    };
+  }
+
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      if (typeof closeGroupCreationModal === 'function') closeGroupCreationModal();
+      else if (overlay) {
+        overlay.classList.add('hidden');
+        overlay.style.display = 'none';
+      }
+    };
+  }
+
+  // Close on click outside
+  if (overlay) {
+    overlay.onclick = (e) => {
+      if (e.target === overlay) {
+        if (typeof closeGroupCreationModal === 'function') closeGroupCreationModal();
+        else {
+          overlay.classList.add('hidden');
+          overlay.style.display = 'none';
+        }
+      }
+    };
+  }
+
+  // Logic for "Add Users" button
+  if (addUsersBtn) {
+    addUsersBtn.onclick = async () => {
+      console.log('Add Users clicked');
+      // Show user selection area
+      const area = document.getElementById('group-user-selection-area');
+      if (area) area.style.display = 'block';
+
+      // Hide "Add Users" button, Show "Make Group" button
+      addUsersBtn.style.display = 'none';
+      if (submitBtn) submitBtn.style.display = 'block';
+
+      // Load users
+      await loadUsersForGroupCreation();
+    };
+  }
+
+  // Search input listener
+  const searchInput = document.getElementById('group-member-search');
+  if (searchInput) {
+    searchInput.oninput = (e) => {
+      filterGroupMemberUsers(e.target.value);
+    };
+  }
+
+  if (submitBtn) {
+    submitBtn.onclick = handleGroupCreate;
+  }
+}
+
+async function loadUsersForGroupCreation() {
+  const container = document.getElementById('group-member-list');
+  if (!container) return;
+  container.innerHTML = '<div style="padding:10px; color:#6b7280;">Loading users...</div>';
+
+  try {
+    // Try list endpoint
+    let users = [];
+    const listRes = await fetch(`${API_BASE}/users/`, { headers: defaultHeaders() });
+
+    if (listRes.ok) {
+      users = await listRes.json();
+      // Handle pagination if DRF is paginated (usually 'results' key)
+      if (users.results && Array.isArray(users.results)) {
+        users = users.results;
+      }
+    } else {
+      // Fallback to searching common letters if list is restricted
+      const searchRes = await fetch(`${API_BASE}/users/search/?q=a`, { headers: defaultHeaders() });
+      if (searchRes.ok) users = await searchRes.json();
+    }
+
+    // Filter out current user
+    if (Array.isArray(users)) {
+      users = users.filter(u => u.id !== currentUserId);
+      // Sort by name
+      users.sort((a, b) => (a.first_name || a.username).localeCompare(b.first_name || b.username));
+    } else {
+      users = [];
+    }
+
+    // Store for filtering
+    container.dataset.allUsers = JSON.stringify(users);
+
+    renderGroupMemberUsers(users);
+
+  } catch (err) {
+    console.error('Error loading users:', err);
+    container.innerHTML = '<div style="padding:10px; color:#ef4444;">Failed to load users</div>';
+  }
+}
+
+function renderGroupMemberUsers(users) {
+  const container = document.getElementById('group-member-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!users || users.length === 0) {
+    container.innerHTML = '<div style="padding:10px; color:#6b7280;">No users found</div>';
+    return;
+  }
+
+  users.forEach(user => {
+    const div = document.createElement('div');
+    div.className = 'compose-item';
+    div.style.display = 'flex';
+    div.style.alignItems = 'center';
+    div.style.padding = '10px';
+    div.style.cursor = 'pointer';
+    div.style.borderBottom = '1px solid var(--border)';
+
+    // Checkbox
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = user.id;
+    checkbox.className = 'group-member-checkbox';
+    checkbox.style.marginRight = '12px';
+    checkbox.style.cursor = 'pointer';
+
+    // Avatar
+    const avatar = document.createElement('div');
+    avatar.className = 'compose-avatar';
+    avatar.textContent = (user.first_name?.[0] || user.username?.[0] || 'U').toUpperCase();
+    avatar.style.marginRight = '12px';
+
+    // Info
+    const info = document.createElement('div');
+    info.className = 'compose-info';
+
+    const name = document.createElement('div');
+    name.className = 'compose-name';
+    name.textContent = user.first_name ? `${user.first_name} ${user.last_name}` : user.username;
+    name.style.fontWeight = '600';
+    name.style.fontSize = '13px';
+
+    const username = document.createElement('div');
+    username.className = 'compose-username';
+    username.textContent = `@${user.username}`;
+    username.style.fontSize = '11px';
+    username.style.color = '#6b7280';
+
+    info.appendChild(name);
+    info.appendChild(username);
+
+    div.appendChild(checkbox);
+    div.appendChild(avatar);
+    div.appendChild(info);
+
+    // Toggle checkbox on click
+    div.onclick = (e) => {
+      if (e.target !== checkbox) {
+        checkbox.checked = !checkbox.checked;
+      }
+    };
+
+    container.appendChild(div);
+  });
+}
+
+function filterGroupMemberUsers(query) {
+  const container = document.getElementById('group-member-list');
+  if (!container || !container.dataset.allUsers) return;
+
+  let users = [];
+  try { users = JSON.parse(container.dataset.allUsers); } catch (e) { }
+
+  if (!query) {
+    renderGroupMemberUsers(users);
+    return;
+  }
+
+  const q = query.toLowerCase();
+  const filtered = users.filter(u =>
+    (u.first_name && u.first_name.toLowerCase().includes(q)) ||
+    (u.last_name && u.last_name.toLowerCase().includes(q)) ||
+    (u.username && u.username.toLowerCase().includes(q))
+  );
+
+  renderGroupMemberUsers(filtered);
+}
+
+function resetGroupCreationForm() {
+  const nameInput = document.getElementById('group-name-input');
+  const descInput = document.getElementById('group-desc-input');
+  const searchInput = document.getElementById('group-member-search');
+  const list = document.getElementById('group-member-list');
+  const userArea = document.getElementById('group-user-selection-area');
+  const addBtn = document.getElementById('group-add-users-btn');
+  const submitBtn = document.getElementById('submit-group-btn');
+
+  if (nameInput) nameInput.value = '';
+  if (descInput) descInput.value = '';
+  if (searchInput) searchInput.value = '';
+  if (list) list.innerHTML = '';
+
+  if (userArea) userArea.style.display = 'none';
+  if (addBtn) addBtn.style.display = 'block';
+  if (submitBtn) submitBtn.style.display = 'none';
+}
+
+async function handleGroupCreate() {
+  const nameInput = document.getElementById('group-name-input');
+  const descInput = document.getElementById('group-desc-input');
+
+  const name = nameInput.value.trim();
+  const description = descInput ? descInput.value.trim() : '';
+  const checkboxes = document.querySelectorAll('.group-member-checkbox:checked');
+  const memberIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+  if (!name) {
+    alert('Please enter a group name');
+    return;
+  }
+
+  const data = {
+    name: name,
+    description: description,
+    member_ids: memberIds
+  };
+
+  const btn = document.getElementById('submit-group-btn');
+  if (btn) {
+    btn.textContent = 'Creating...';
+    btn.disabled = true;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/projects/`, {
+      method: 'POST',
+      headers: defaultHeaders(),
+      body: JSON.stringify(data)
+    });
+
+    if (res.ok) {
+      const project = await res.json();
+      // Close modal
+      const closeBtn = document.getElementById('close-group-btn');
+      if (closeBtn) closeBtn.click();
+
+      // Reload projects
+      loadProjects();
+      // Open new project
+      openChat('project', project.id);
+    } else {
+      const err = await res.json();
+      let msg = 'Failed to create group';
+      if (err.name) msg = err.name[0];
+      else if (err.detail) msg = err.detail;
+      alert(msg);
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Error creating group');
+  } finally {
+    if (btn) {
+      btn.textContent = 'Make Group'; // Reset text
+      btn.disabled = false;
+    }
+  }
+}
+
+function openGroupCreationModal() {
+  const overlay = document.getElementById('create-group-overlay');
+  if (overlay) {
+    overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
+
+    // Reset view to initial state (hide user list)
+    const userArea = document.getElementById('group-user-selection-area');
+    const addUsersBtn = document.getElementById('group-add-users-btn');
+    const submitBtn = document.getElementById('submit-group-btn');
+
+    if (userArea) userArea.style.display = 'none';
+    if (addUsersBtn) addUsersBtn.style.display = 'block';
+    if (submitBtn) submitBtn.style.display = 'none';
+
+    // Clear inputs
+    resetGroupCreationForm();
+  }
+}
+
+function closeGroupCreationModal() {
+  const overlay = document.getElementById('create-group-overlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+    overlay.style.display = 'none';
+    resetGroupCreationForm();
+  }
+}
+
+async function uploadAvatar(file) {
+  const formData = new FormData();
+  formData.append('avatar', file);
+
+  try {
+    const res = await fetch(`${API_BASE}/users/upload_avatar/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCSRFToken()
+      },
+      body: formData
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      alert('Profile picture updated!');
+      // Reload unified chats to refresh avatar
+      loadUnifiedChats();
+      return data;
+    } else {
+      const err = await res.json();
+      alert(err.error || 'Failed to upload avatar');
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Error uploading avatar');
+  }
+}
+
+/* ============================================================
+   HOST MEETING HANDLER
+   ============================================================ */
+document.addEventListener('DOMContentLoaded', () => {
+  const hostMeetingBtn = document.getElementById('menu-host-meeting');
+  const overlay = document.getElementById('host-meeting-overlay');
+  const startBtn = document.getElementById('start-meeting-btn');
+  const inviteList = document.getElementById('meeting-invite-list');
+
+  if (hostMeetingBtn && overlay) {
+    hostMeetingBtn.onclick = () => {
+      // Close menu
+      const menu = document.getElementById('header-menu-dropdown');
+      if (menu) menu.classList.remove('active');
+
+      // Show modal
+      overlay.classList.remove('hidden');
+      overlay.style.display = 'flex';
+
+      // Populate recipients
+      populateMeetingInvites();
+    };
+
+    startBtn.onclick = async () => {
+      const titleInput = document.getElementById('meeting-title-input');
+      const title = titleInput.value.trim() || 'Instant Meeting';
+
+      // Gather selected invites
+      const checkboxes = inviteList.querySelectorAll('input.meeting-invite-cb:checked');
+      const invites = Array.from(checkboxes).map(cb => ({
+        type: cb.dataset.type,
+        id: cb.dataset.id
+      }));
+
+      startBtn.disabled = true;
+      startBtn.textContent = 'Starting...';
+
+      try {
+        const formData = new FormData();
+        formData.append('title', title);
+        formData.append('invites', JSON.stringify(invites));
+
+        const res = await fetch(`${API_BASE}/meetings/create/`, {
+          method: 'POST',
+          body: formData,
+          headers: { 'X-CSRFToken': getCSRFToken() }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          overlay.classList.add('hidden');
+          overlay.style.display = 'none';
+          if (data.redirect_url) {
+            window.location.href = data.redirect_url;
+          }
+        } else {
+          console.error("Failed", res.status);
+          alert("Failed to start meeting");
+        }
+      } catch (e) {
+        console.error(e);
+        alert("Error starting meeting");
+      } finally {
+        startBtn.disabled = false;
+        startBtn.textContent = 'Start & Invite';
+      }
+    };
+  }
+
+  function populateMeetingInvites() {
+    inviteList.innerHTML = '<div style="padding:10px; text-align:center; color:#9ca3af">Loading chats...</div>';
+
+    fetch(`${API_BASE}/messages/recent_chats/`, { headers: defaultHeaders() })
+      .then(res => res.json())
+      .then(items => {
+        inviteList.innerHTML = '';
+        if (!items || items.length === 0) {
+          inviteList.innerHTML = '<div style="padding:10px; text-align:center; color:#9ca3af">No recent chats found</div>';
+          return;
+        }
+
+        items.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'menu-item'; // reuse style
+          div.style.padding = "8px";
+
+          let name = "Unknown";
+          let type = "user";
+          let id = 0;
+
+          if (item.type === 'user') {
+            name = item.user.first_name ? `${item.user.first_name} ${item.user.last_name}` : item.user.username;
+            type = 'user';
+            id = item.user.id;
+          } else {
+            name = item.project.name;
+            type = 'project';
+            id = item.project.id;
+          }
+
+          div.innerHTML = `
+                <input type="checkbox" class="meeting-invite-cb" data-type="${type}" data-id="${id}" style="margin-right:10px;">
+                <span>${escapeHtml(name)} <small style="color:#9ca3af">(${type})</small></span>
+             `;
+          div.onclick = (e) => {
+            if (e.target.type !== 'checkbox') {
+              const cb = div.querySelector('input');
+              cb.checked = !cb.checked;
+            }
+          };
+
+          inviteList.appendChild(div);
+        });
+      })
+      .catch(e => {
+        inviteList.innerHTML = '<div style="padding:10px; text-align:center; color:red">Error loading chats</div>';
+      });
+  }
+});

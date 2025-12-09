@@ -221,6 +221,7 @@ class MessageSerializer(serializers.ModelSerializer):
     )
     file_url = serializers.SerializerMethodField()
     timestamp_iso = serializers.SerializerMethodField()
+    meeting_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Message
@@ -229,11 +230,41 @@ class MessageSerializer(serializers.ModelSerializer):
             'receiver', 'receiver_id', 'receiver_username',
             'project', 'project_id', 'project_name',
             'text', 'file', 'file_url', 'reply_to_id',
-            'timestamp', 'timestamp_iso', 'is_read'
+            'timestamp', 'timestamp_iso', 'is_read',
+            'meeting_status'
         ]
         read_only_fields = [
             'id', 'timestamp', 'sender', 'sender_id', 'sender_username'
         ]
+    
+    def get_meeting_status(self, obj):
+        """
+        Check if message is a meeting invite and return meeting status.
+        """
+        if not obj.text or '[MEETING_INVITE]' not in obj.text:
+            return None
+            
+        try:
+            import json
+            from .models import Meeting
+            
+            marker = '[MEETING_INVITE]'
+            # Extract JSON part
+            json_str = obj.text[obj.text.find(marker) + len(marker):]
+            data = json.loads(json_str)
+            meeting_id = data.get('id')
+            
+            if not meeting_id:
+                return None
+                
+            meeting = Meeting.objects.filter(id=meeting_id).first()
+            if meeting:
+                return 'ended' if (meeting.ended or meeting.status == 'ended') else 'active'
+                
+        except Exception as e:
+            logger.warning(f"Error checking meeting status for message {obj.id}: {e}")
+            return None
+        return None
     
     def get_file_url(self, obj):
         """
@@ -695,3 +726,18 @@ class ErrorResponseSerializer(serializers.Serializer):
         required=False
     )
     data = serializers.JSONField(required=False)
+
+
+# ====================== SIDEBAR ITEM SERIALIZER ======================
+
+class SidebarItemSerializer(serializers.Serializer):
+    """
+    Serializer for unified sidebar items (DMs and Projects).
+    """
+    type = serializers.ChoiceField(choices=['user', 'project'])
+    user = UserSerializer(required=False, allow_null=True)
+    project = ProjectSerializer(required=False, allow_null=True)
+    last_message = serializers.CharField(allow_null=True, required=False)
+    last_message_timestamp = serializers.DateTimeField(allow_null=True, required=False)
+    unread_count = serializers.IntegerField(default=0)
+
