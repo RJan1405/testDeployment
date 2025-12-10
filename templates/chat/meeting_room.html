@@ -148,7 +148,8 @@
         background-color: #1f2937;
         padding: 24px;
         border-radius: 12px;
-        width: 400px;
+        width: 90%;
+        max-width: 400px;
         box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
         border: 1px solid #374151;
     }
@@ -198,6 +199,13 @@
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+    </button>
+
+    <button id="btn-share" class="control-btn" title="Share Screen" onclick="toggleScreenShare()">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
         </svg>
     </button>
 
@@ -446,6 +454,97 @@
         track.enabled = !track.enabled;
         document.getElementById('btn-cam').classList.toggle('inactive', !track.enabled);
     };
+
+    let isScreenSharing = false;
+    let originalVideoTrack = null;
+
+    async function toggleScreenShare() {
+        if (isScreenSharing) {
+            stopScreenShare();
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            const screenTrack = stream.getVideoTracks()[0];
+
+            if (!localStream) {
+                console.warn("No local stream");
+                return;
+            }
+
+            const videoTracks = localStream.getVideoTracks();
+            if (videoTracks.length > 0) {
+                originalVideoTrack = videoTracks[0];
+                localStream.removeTrack(originalVideoTrack);
+            }
+
+            localStream.addTrack(screenTrack);
+
+            // Update Local Video
+            const localVideo = document.getElementById('local-video');
+            if (localVideo) localVideo.srcObject = localStream;
+
+            // Replace track in peers
+            Object.values(peers).forEach(p => {
+                if (p.pc) {
+                    const sender = p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                    if (sender) {
+                        sender.replaceTrack(screenTrack).catch(e => console.error("ReplaceTrack Error", e));
+                    }
+                }
+            });
+
+            // Handle stop via browser UI
+            screenTrack.onended = () => stopScreenShare();
+
+            isScreenSharing = true;
+            document.getElementById('btn-share').style.background = '#2563eb';
+
+        } catch (e) {
+            console.error("Error sharing screen", e);
+        }
+    }
+
+    function stopScreenShare() {
+        if (!localStream) return;
+        const screenTrack = localStream.getVideoTracks()[0];
+        if (screenTrack) {
+            screenTrack.stop();
+            localStream.removeTrack(screenTrack);
+        }
+
+        if (originalVideoTrack) {
+            localStream.addTrack(originalVideoTrack);
+            originalVideoTrack.enabled = true; // Ensure it's on
+        }
+
+        // Update Local Video
+        const localVideo = document.getElementById('local-video');
+        if (localVideo) localVideo.srcObject = localStream;
+
+        // Restore track in peers
+        Object.values(peers).forEach(p => {
+            if (p.pc) {
+                const sender = p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender && originalVideoTrack) {
+                    sender.replaceTrack(originalVideoTrack).catch(e => console.error("RestoreTrack Error", e));
+                }
+            }
+        });
+
+        isScreenSharing = false;
+        originalVideoTrack = null;
+        document.getElementById('btn-share').style.background = '#374151';
+
+        // Restore cam button state if needed
+        const camBtn = document.getElementById('btn-cam');
+        if (originalVideoTrack && !originalVideoTrack.enabled) {
+            camBtn.classList.add('inactive');
+        } else {
+            camBtn.classList.remove('inactive');
+        }
+    }
 
 
 

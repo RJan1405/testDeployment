@@ -79,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   loadUnifiedChats();
   setupEventListeners();
+  setupMobileMeetingMenu();
 
   try {
     hideRightSidebar();
@@ -302,6 +303,11 @@ function openChat(type, id) {
       const el = window.event.target.closest('.chat-item');
       if (el) el.classList.add('active');
     }
+
+    // MOBILE: Switch to chat view
+    const mainContainer = document.getElementById('main-container');
+    if (mainContainer) mainContainer.classList.add('mobile-chat-active');
+
   } catch (e) {
     console.warn('Could not update active state:', e);
   }
@@ -318,6 +324,14 @@ function openChat(type, id) {
 
   loadChatWindow(type, id);
   connectWebSocket(type, id);
+}
+
+function closeMobileChat() {
+  const mainContainer = document.getElementById('main-container');
+  if (mainContainer) mainContainer.classList.remove('mobile-chat-active');
+
+  // Optional: Deactivate active item in list if desired, but keeping it active is also fine state-wise
+  // document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
 }
 
 /* ============================================================
@@ -392,16 +406,25 @@ async function loadChatWindow(type, id) {
     chatWindow.innerHTML = `
       <div class="chat-header">
         <div class="chat-header-title" ${type === 'user' ? `onclick="openMemberProfile(${id})" style="cursor:pointer;"` : ''}>
-          ${headerAvatar}
-          <h3>${escapeHtml(headerName)}</h3>
-          <span class="connection-status ${statusClass}">${statusText}</span>
-          <button id="message-search-btn" style="display:flex;align-items:center;justify-content:center;margin-left:8px;border:none;background:#e5e7eb;color:#374151;border-radius:8px;width:32px;height:32px;cursor:pointer;transition:all 0.2s">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <button class="mobile-back-btn" onclick="event.stopPropagation(); closeMobileChat()" title="Back to list">
+             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
           </button>
-          ${mediaToggleBtn}
-          ${callBtns}
+          ${headerAvatar}
+          <div style="display:flex; flex-direction:column; justify-content:center; gap:2px;">
+             <h3>${escapeHtml(headerName)}</h3>
+             ${statusText ? `<span class="connection-status ${statusClass}" style="width:fit-content;">${statusText}</span>` : ''}
+          </div>
+        </div>
+        
+        <div class="chat-header-actions" style="display:flex; align-items:center; gap:8px;">
+            <button id="message-search-btn" style="display:flex;align-items:center;justify-content:center;border:none;background:#f3f4f6;color:#374151;border-radius:8px;width:36px;height:36px;cursor:pointer;transition:all 0.2s">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </button>
+            ${mediaToggleBtn}
+            ${callBtns}
         </div>
       </div>
+
       <div class="messages-container" id="messages-container" tabindex="0" style="user-select: none"></div>
       <div id="reply-preview" class="reply-preview" style="display:none; padding:6px 10px; border-top:2px solid #d1d5db; border-bottom:2px solid #d1d5db; background:#f9fafb"></div>
       <div class="message-input-area">
@@ -1632,6 +1655,33 @@ function enableSendingForDM() {
   if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send'; }
 }
 
+/* ============================================================
+   MOBILE MEETING MENU
+   ============================================================ */
+function setupMobileMeetingMenu() {
+  const btn = document.getElementById('meeting-more-btn');
+  const menu = document.getElementById('meeting-mobile-menu');
+  if (!btn || !menu) return;
+
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    menu.classList.toggle('hidden');
+  };
+
+  // Close when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!menu.classList.contains('hidden') && !menu.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+      menu.classList.add('hidden');
+    }
+  });
+}
+
+function closeMobileMenu() {
+  const menu = document.getElementById('meeting-mobile-menu');
+  if (menu) menu.classList.add('hidden');
+}
+
+
 function sendMessageViaWebSocket(type, id) {
   const inputEl = document.getElementById('message-input');
   if (!inputEl) return;
@@ -1961,8 +2011,9 @@ async function openMemberProfile(userId) {
 
   const editAvatarBtn = document.getElementById('profile-edit-avatar-btn');
   const avatarInput = document.getElementById('avatar-input');
+  const logoutForm = document.getElementById('profile-logout-form');
 
-  // Show/Hide Edit Button
+  // Show/Hide Edit Button & Logout Form
   if (editAvatarBtn) {
     if (Number(userId) === Number(currentUserId)) {
       editAvatarBtn.style.display = 'flex';
@@ -1978,8 +2029,17 @@ async function openMemberProfile(userId) {
           }
         };
       }
+
+      // SHOW Logout, HIDE Message
+      if (logoutForm) logoutForm.style.display = 'block';
+      if (messageBtn) messageBtn.style.display = 'none';
+
     } else {
       editAvatarBtn.style.display = 'none';
+
+      // HIDE Logout, SHOW Message
+      if (logoutForm) logoutForm.style.display = 'none';
+      if (messageBtn) messageBtn.style.display = 'block';
     }
   }
 
@@ -2114,11 +2174,6 @@ function handleWebSocketMessage(data) {
   if (data.type === 'message') {
     const msg = normalizeIncomingMessage(data);
 
-    if (currentChatType !== 'user' || !currentChatId) {
-      console.log('❌ Ignored DM message (no user chat open)', msg);
-      return;
-    }
-
     const senderId = Number(msg.sender_id);
     const receiverId = Number(msg.receiver_id);
 
@@ -2127,8 +2182,16 @@ function handleWebSocketMessage(data) {
       return;
     }
 
-    if (!(senderId === Number(currentChatId) || receiverId === Number(currentChatId))) {
-      console.log('❌ Ignored DM message (not for current chat)', { currentChatType, currentChatId, msg });
+    // Check if this message belongs to the CURRENT open chat
+    const isForCurrentChat = (currentChatType === 'user' && currentChatId) &&
+      (senderId === Number(currentChatId) || receiverId === Number(currentChatId));
+
+    if (!isForCurrentChat) {
+      // Background Message
+      loadRecentChats();
+      if (senderId !== Number(currentUserId)) {
+        showToast(`New message from ${msg.sender_username || 'User'}`, msg.text);
+      }
       return;
     }
 
@@ -2204,7 +2267,11 @@ function handleWebSocketMessage(data) {
     const projId = Number(msg.project_id);
 
     if (currentChatType !== 'project' || Number(currentChatId) !== projId) {
-      console.log('❌ Ignored project message (not current project)', { currentChatType, currentChatId, projId });
+      // Background Project Message
+      loadRecentChats();
+      if (Number(msg.sender_id) !== Number(currentUserId)) {
+        showToast(`Project Message: ${msg.sender_username || 'Member'}`, msg.text);
+      }
       return;
     }
 
@@ -2304,25 +2371,7 @@ function updatePresenceFromServer(status) {
   }
 }
 
-function handleRTCMessage(data) {
-  if (Number(data.from_id) === Number(currentUserId)) return;
-  const action = data.action;
-  if (action === 'offer') {
-    rtcIncomingOffer = { sdp: data.sdp, call_type: data.call_type };
-    rtcPeerToId = Number(data.from_id || 0);
-    openCallOverlay(data.call_type === 'video' ? 'video' : 'audio', true);
-    return;
-  }
-  if (action === 'answer') {
-    if (rtcPeer && data.sdp) rtcPeer.setRemoteDescription(new RTCSessionDescription(data.sdp));
-    return;
-  }
-  if (action === 'candidate') {
-    try { if (rtcPeer && data.candidate) rtcPeer.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch (e) { }
-    return;
-  }
-  if (action === 'end') { endCall(); return; }
-}
+
 
 function schedulePendingOffline() {
   if (lastAppliedPresence === 'offline') return;
@@ -3086,15 +3135,24 @@ function joinMeetingFromInvite() {
 
 function openCallOverlay(kind, incoming) {
   const overlay = document.getElementById('call-overlay');
-  const title = document.getElementById('call-title');
-  const acceptBtn = document.getElementById('call-accept-btn');
-  const rejectBtn = document.getElementById('call-reject-btn');
+  const incomingUI = document.getElementById('incoming-call-ui');
+  const callControls = document.getElementById('call-controls');
+  const titleText = document.getElementById('call-title-text');
+  const subtitleText = document.getElementById('call-subtitle-text');
+
   if (!overlay) return;
   overlay.classList.remove('hidden');
   overlay.style.display = 'flex';
-  if (title) title.textContent = (incoming ? 'Incoming ' : 'Calling ') + (kind === 'video' ? 'Video' : 'Voice');
-  if (acceptBtn) acceptBtn.style.display = incoming ? 'inline-block' : 'none';
-  if (rejectBtn) rejectBtn.style.display = incoming ? 'inline-block' : 'none';
+
+  if (incoming) {
+    if (incomingUI) incomingUI.style.display = 'flex';
+    if (callControls) callControls.style.display = 'none';
+    if (titleText) titleText.textContent = 'Incoming Call...';
+    if (subtitleText) subtitleText.textContent = kind === 'video' ? 'Video Call' : 'Voice Call';
+  } else {
+    if (incomingUI) incomingUI.style.display = 'none';
+    if (callControls) callControls.style.display = 'flex';
+  }
 }
 
 function closeCallOverlay() {
@@ -3105,8 +3163,13 @@ function closeCallOverlay() {
 async function startOutgoingCall(kind) {
   if (currentChatType !== 'user' || !currentChatId || !ws || ws.readyState !== WebSocket.OPEN) return;
   rtcCallType = kind;
+
+  // Reset Peer To
+  rtcPeerToId = Number(currentChatId);
+
   openCallOverlay(kind, false);
   const constraints = { audio: true, video: kind === 'video' ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false };
+
   try {
     rtcLocalStream = await navigator.mediaDevices.getUserMedia(constraints);
   } catch (e) {
@@ -3115,15 +3178,36 @@ async function startOutgoingCall(kind) {
     closeCallOverlay();
     return;
   }
+
   const lv = document.getElementById('local-video');
-  if (lv) lv.srcObject = rtcLocalStream;
+  if (lv) {
+    lv.srcObject = rtcLocalStream;
+    lv.onloadedmetadata = () => lv.play().catch(e => console.warn('Local Play Error', e));
+  }
+
   rtcPeer = new RTCPeerConnection(getRtcConfig());
+
+  // Connection State Logging
+  rtcPeer.oniceconnectionstatechange = () => console.log('🧊 ICE Connection State:', rtcPeer.iceConnectionState);
+  rtcPeer.onconnectionstatechange = () => console.log('🔗 Connection State:', rtcPeer.connectionState);
+
   rtcLocalStream.getTracks().forEach(t => rtcPeer.addTrack(t, rtcLocalStream));
-  rtcPeer.ontrack = (ev) => { const rv = document.getElementById('remote-video'); if (rv) rv.srcObject = ev.streams[0]; };
+
+  rtcPeer.ontrack = (ev) => {
+    const rv = document.getElementById('remote-video');
+    if (rv) {
+      console.log('📽️ Remote Track Received');
+      rv.srcObject = ev.streams[0];
+      rv.onloadedmetadata = () => rv.play().catch(e => console.warn('Remote Play Error', e));
+    }
+  };
+
   rtcPeer.onicecandidate = (ev) => { if (ev.candidate) sendRTC('candidate', { candidate: ev.candidate }); };
+
   const offer = await rtcPeer.createOffer();
   await rtcPeer.setLocalDescription(offer);
   sendRTC('offer', { sdp: offer, call_type: kind });
+  console.log('📤 Offer Sent');
 }
 
 async function acceptIncomingCall() {
@@ -3131,21 +3215,100 @@ async function acceptIncomingCall() {
   const kind = rtcIncomingOffer.call_type === 'video' ? 'video' : 'audio';
   rtcCallType = kind;
   const constraints = { audio: true, video: kind === 'video' ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false };
-  try { rtcLocalStream = await navigator.mediaDevices.getUserMedia(constraints); } catch (e) { endCall(); return; }
+
+  try { rtcLocalStream = await navigator.mediaDevices.getUserMedia(constraints); } catch (e) { console.error(e); endCall(); return; }
+
   const lv = document.getElementById('local-video');
-  if (lv) lv.srcObject = rtcLocalStream;
+  if (lv) {
+    lv.srcObject = rtcLocalStream;
+    lv.onloadedmetadata = () => lv.play().catch(e => console.warn('Local Play Error', e));
+  }
+
   rtcPeer = new RTCPeerConnection(getRtcConfig());
+
+  // Connection State Logging
+  rtcPeer.oniceconnectionstatechange = () => console.log('🧊 ICE Connection State:', rtcPeer.iceConnectionState);
+  rtcPeer.onconnectionstatechange = () => console.log('🔗 Connection State:', rtcPeer.connectionState);
+
   rtcLocalStream.getTracks().forEach(t => rtcPeer.addTrack(t, rtcLocalStream));
-  rtcPeer.ontrack = (ev) => { const rv = document.getElementById('remote-video'); if (rv) rv.srcObject = ev.streams[0]; };
+
+  rtcPeer.ontrack = (ev) => {
+    const rv = document.getElementById('remote-video');
+    if (rv) {
+      console.log('📽️ Remote Track Received (Answerer)');
+      rv.srcObject = ev.streams[0];
+      rv.onloadedmetadata = () => rv.play().catch(e => console.warn('Remote Play Error', e));
+    }
+  };
+
   rtcPeer.onicecandidate = (ev) => { if (ev.candidate) sendRTC('candidate', { candidate: ev.candidate }); };
+
   await rtcPeer.setRemoteDescription(new RTCSessionDescription(rtcIncomingOffer.sdp));
+
+  // Flush buffering candidates now
+  flushCandidateQueue();
+
   const answer = await rtcPeer.createAnswer();
   await rtcPeer.setLocalDescription(answer);
   sendRTC('answer', { sdp: answer, call_type: kind });
-  const acceptBtn = document.getElementById('call-accept-btn');
-  const rejectBtn = document.getElementById('call-reject-btn');
-  if (acceptBtn) acceptBtn.style.display = 'none';
-  if (rejectBtn) rejectBtn.style.display = 'none';
+  console.log('📤 Answer Sent');
+
+  // Update UI for Active Call
+  const incomingUI = document.getElementById('incoming-call-ui');
+  const callControls = document.getElementById('call-controls');
+  if (incomingUI) incomingUI.style.display = 'none';
+  if (callControls) callControls.style.display = 'flex';
+}
+
+// Queue for candidates arriving before RemoteDescription
+let rtcCandidateQueue = [];
+
+function handleRTCMessage(data) {
+  if (Number(data.from_id) === Number(currentUserId)) return;
+  const action = data.action;
+
+  console.log(`📡 RTC Signal: ${action} from ${data.from_id}`);
+
+  if (action === 'offer') {
+    rtcIncomingOffer = { sdp: data.sdp, call_type: data.call_type };
+    rtcPeerToId = Number(data.from_id || 0);
+    rtcCandidateQueue = []; // Clear queue for new call
+    openCallOverlay(data.call_type === 'video' ? 'video' : 'audio', true);
+    return;
+  }
+  if (action === 'answer') {
+    if (rtcPeer && data.sdp) {
+      rtcPeer.setRemoteDescription(new RTCSessionDescription(data.sdp))
+        .then(() => {
+          console.log('✅ Remote Description Set (Answer)');
+          flushCandidateQueue();
+        })
+        .catch(e => console.error('❌ SetRemoteDesc (Answer) Failed:', e));
+    }
+    return;
+  }
+  if (action === 'candidate') {
+    if (data.candidate) {
+      const cand = new RTCIceCandidate(data.candidate);
+      if (rtcPeer && rtcPeer.remoteDescription) {
+        rtcPeer.addIceCandidate(cand).catch(e => console.error('ICE Error', e));
+      } else {
+        console.log('⏳ Buffering ICE Candidate (RemoteDesc not set)');
+        rtcCandidateQueue.push(cand);
+      }
+    }
+    return;
+  }
+  if (action === 'end') { endCall(); return; }
+}
+
+function flushCandidateQueue() {
+  if (!rtcPeer || !rtcCandidateQueue.length) return;
+  console.log(`🔄 Flushing ${rtcCandidateQueue.length} buffered candidates`);
+  rtcCandidateQueue.forEach(cand => {
+    rtcPeer.addIceCandidate(cand).catch(e => console.error('Buffered ICE Error', e));
+  });
+  rtcCandidateQueue = [];
 }
 
 function sendRTC(action, payload) {
@@ -3153,8 +3316,12 @@ function sendRTC(action, payload) {
   if (rtcPeerToId) body.to = rtcPeerToId;
   const msg = JSON.stringify(body);
   let sent = false;
+
   if (ws && ws.readyState === WebSocket.OPEN) { try { ws.send(msg); sent = true; } catch (e) { } }
+  // Fallback to notify socket if main socket is not valid for target? 
+  // Code assumes notifies handle it. 
   if (notifyWS && notifyWS.readyState === WebSocket.OPEN) { try { notifyWS.send(msg); sent = true; } catch (e) { } }
+
   if (!sent) console.warn('RTC signal not sent: no WS channels open');
 }
 
@@ -3247,16 +3414,19 @@ async function toggleScreenShare() {
     const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
     const screenTrack = stream.getVideoTracks()[0];
 
-    // Keep reference to original cam track
-    if (projectLocalStream) {
-      originalVideoTrack = projectLocalStream.getVideoTracks()[0];
+    if (!projectLocalStream) {
+      console.warn('No local stream to replace track on.');
+      return;
     }
 
-    // Replace track in local stream (for self view)
-    if (projectLocalStream) {
+    // Keep reference to original cam track if it exists
+    const videoTracks = projectLocalStream.getVideoTracks();
+    if (videoTracks.length > 0) {
+      originalVideoTrack = videoTracks[0];
       projectLocalStream.removeTrack(originalVideoTrack);
-      projectLocalStream.addTrack(screenTrack);
     }
+
+    projectLocalStream.addTrack(screenTrack);
 
     // Update Local Video Element
     const localVideo = document.getElementById(`video-${currentUserId}`);
@@ -3264,9 +3434,14 @@ async function toggleScreenShare() {
 
     // Replace track in all PeerConnections
     Object.values(projectPeers).forEach(pc => {
-      const sender = pc.getSenders().find(s => s.track.kind === 'video');
+      const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
       if (sender) {
-        sender.replaceTrack(screenTrack);
+        sender.replaceTrack(screenTrack).catch(e => console.error('ReplaceTrack error', e));
+      } else {
+        // If no video sender (e.g. joined as audio only), add the track? 
+        // Mesh adding tracks mid-call is complex without renegotation. 
+        // For now, assume video constraint was initially true or sender exists.
+        console.warn('No video sender found to replace track.');
       }
     });
 
@@ -3286,17 +3461,19 @@ async function toggleScreenShare() {
 }
 
 function stopScreenShare() {
-  if (!isScreenSharing) return;
+  if (!projectLocalStream) return;
 
-  // Stop screen track
+  // Find the current screen track (assuming it's the video track)
   const screenTrack = projectLocalStream.getVideoTracks()[0];
-  if (screenTrack) screenTrack.stop();
+  // If track is already stopped (e.g. by 'ended' event), just remove from stream
+  if (screenTrack) {
+    screenTrack.stop();
+    projectLocalStream.removeTrack(screenTrack);
+  }
 
   // Restore camera track
   if (originalVideoTrack) {
-    projectLocalStream.removeTrack(screenTrack);
     projectLocalStream.addTrack(originalVideoTrack);
-    // Important: Re-enable if it was enabled before? Assuming yes.
     originalVideoTrack.enabled = true;
   }
 
@@ -3306,9 +3483,14 @@ function stopScreenShare() {
 
   // Replace track in peers
   Object.values(projectPeers).forEach(pc => {
-    const sender = pc.getSenders().find(s => s.track.kind === 'video');
-    if (sender && originalVideoTrack) {
-      sender.replaceTrack(originalVideoTrack);
+    const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+    if (sender) {
+      if (originalVideoTrack) {
+        sender.replaceTrack(originalVideoTrack).catch(e => console.error('Restoring track error', e));
+      } else {
+        // If no original track (was audio only?), maybe disable sender?
+        // For now, doing nothing effectively stops sending video.
+      }
     }
   });
 
@@ -3938,3 +4120,35 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   }
 });
+
+function showToast(title, body) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.style.cssText = 'position:fixed; top:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:10px;';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.style.cssText = 'background:#1f2937; color:white; padding:12px 16px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.3); border:1px solid #374151; min-width:250px; animation:slideIn 0.3s ease-out;';
+
+  toast.innerHTML = `
+    <div style="font-weight:600; font-size:14px; margin-bottom:4px;">${escapeHtml(title)}</div>
+    <div style="font-size:13px; color:#d1d5db; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${escapeHtml(body)}</div>
+  `;
+
+  container.appendChild(toast);
+
+  // Slide in animation
+  const style = document.createElement('style');
+  style.innerHTML = `@keyframes slideIn { from { transform: translateX(100%); opacity:0; } to { transform: translateX(0); opacity:1; } }`;
+  document.head.appendChild(style);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-10px)';
+    toast.style.transition = 'all 0.3s';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
