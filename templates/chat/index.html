@@ -47,6 +47,8 @@
     gap: 0;
     height: 100vh;
     background: var(--bg);
+    overflow: hidden;
+    /* Prevent body scroll */
   }
 
   #main-container.no-right-sidebar {
@@ -536,49 +538,69 @@
   }
 
   .chat-header {
-    padding: 16px 24px;
+    padding: 12px 16px;
     border-bottom: 2px solid var(--border);
     background: var(--surface);
     display: flex;
     justify-content: space-between;
     align-items: center;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    min-height: 64px;
+    flex-wrap: nowrap;
+    /* Prevent wrapping to keep one line */
   }
 
   .chat-header-title {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
+    /* Reduced from 12px */
+    flex: 1;
+    min-width: 0;
+    /* Enable truncation for children */
+    overflow: hidden;
   }
 
   .chat-header-title h3 {
     margin: 0;
-    font-size: 17px;
+    font-size: 16px;
+    /* Slightly smaller */
     font-weight: 700;
     color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .connection-status {
-    font-size: 11px;
-    padding: 6px 12px;
-    border-radius: 6px;
+    font-size: 10px;
+    /* Smaller font */
+    padding: 2px 8px;
+    /* Reduce padding */
+    border-radius: 4px;
     background: rgba(107, 114, 128, 0.15);
     color: var(--text-light);
-    font-weight: 700;
-    letter-spacing: 0.5px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
     border: 1px solid var(--border);
+    white-space: nowrap;
+    flex-shrink: 0;
+    /* Keep status visible */
+    height: 20px;
+    display: flex;
+    align-items: center;
   }
 
   .connection-status.online {
-    background: rgba(16, 185, 129, 0.15);
+    background: rgba(16, 185, 129, 0.1);
     color: var(--success);
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-color: rgba(16, 185, 129, 0.2);
   }
 
   .connection-status.offline {
-    background: rgba(239, 68, 68, 0.15);
+    background: rgba(239, 68, 68, 0.1);
     color: var(--error);
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-color: rgba(239, 68, 68, 0.2);
   }
 
   .messages-container {
@@ -1782,6 +1804,352 @@
       opacity: 0;
     }
   }
+
+  /* MOBILE RESPONSIVE LAYOUT */
+  @media (max-width: 768px) {
+    #main-container {
+      display: block;
+      /* Stack (but we usually show one at a time) */
+      position: relative;
+    }
+
+    #main-container.no-right-sidebar {
+      display: block;
+    }
+
+    /* Default state: Show Chat List, Hide Chat Area & Right Sidebar */
+    #left-sidebar {
+      width: 100%;
+      height: 100%;
+      display: flex;
+    }
+
+    #chat-area {
+      display: none;
+      width: 100%;
+      height: 100%;
+    }
+
+    #right-sidebar {
+      display: none;
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2000;
+      background: var(--surface);
+    }
+
+    #right-sidebar.active {
+      display: flex !important;
+    }
+
+    #close-right-sidebar {
+      display: block !important;
+    }
+
+    /* Active Chat State: Hide Chat List, Show Chat Area */
+    #main-container.mobile-chat-active #left-sidebar {
+      display: none;
+    }
+
+    #main-container.mobile-chat-active #chat-area {
+      display: flex;
+    }
+
+    /* Back Button Visibility */
+    .mobile-back-btn {
+      display: inline-flex !important;
+    }
+  }
+
+  .mobile-back-btn {
+    display: none;
+    /* Hidden on desktop */
+    margin-right: 8px;
+    background: none;
+    border: none;
+    color: var(--text);
+    padding: 4px;
+    cursor: pointer;
+  }
+
+  /* Mobile Meeting Controls Logic */
+  @media (max-width: 768px) {
+    #desktop-controls {
+      display: none !important;
+    }
+
+    .desktop-only-btn {
+      display: none !important;
+    }
+
+    #mobile-controls {
+      display: flex !important;
+    }
+
+    /* Adjust grid for better mobile view to reduce scroll */
+    #meeting-container {
+      grid-template-columns: 1fr !important;
+      align-content: start !important;
+    }
+
+    .video-tile {
+      max-height: 40vh;
+      /* Ensure 2 tiles fit reasonably well */
+    }
+  }
+
+  .mobile-menu-item {
+    background: transparent;
+    border: none;
+    color: white;
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .mobile-menu-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .mobile-menu-item .icon {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+  }
+
+  @keyframes pulse {
+    0% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+
+    70% {
+      transform: scale(1.1);
+      box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+    }
+
+    100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+  }
+
+  .mobile-chat-action-btn {
+    display: none !important;
+  }
+
+  @media (max-width: 768px) {
+    .mobile-chat-action-btn {
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      margin-left: 0 !important;
+      /* Reset margin */
+      border: none;
+      background: #e5e7eb;
+      color: #374151;
+      border-radius: 8px;
+      width: 32px;
+      height: 32px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .mobile-chat-action-btn:hover {
+      background: #d1d5db;
+    }
+
+    /* Compact Header on Mobile */
+    .join-meeting-text {
+      display: none !important;
+    }
+
+    .chat-header-actions {
+      gap: 4px !important;
+    }
+
+    /* Force smaller buttons in header for mobile */
+    .header-action-btn,
+    #media-toggle-header-btn,
+    #message-search-btn {
+      width: 32px !important;
+      height: 32px !important;
+      margin-left: 0 !important;
+      padding: 0 !important;
+    }
+
+    /* Adjust Join Meeting Button for icon-only style */
+    #project-meeting-btn {
+      padding: 0 !important;
+      width: 32px;
+      height: 32px;
+      justify-content: center;
+      gap: 0 !important;
+    }
+
+    /* Padding for back button in sidebar */
+    .files-header,
+    .members-header,
+    .media-header {
+      padding-left: 40px !important;
+    }
+
+    /* Ensure chat info (if visible) also respects it, though usually hidden/modal */
+    .chat-info-section {
+      padding-left: 40px !important;
+      padding-right: 20px !important;
+      /* Balance it slightly or just keep it simple */
+    }
+  }
+
+  /* PROJECT MEETING CHAT SIDEBAR */
+  #project-meeting-chat-sidebar {
+    position: absolute;
+    right: -320px;
+    top: 60px;
+    /* Adjust based on header height if needed */
+    bottom: 80px;
+    /* Adjust based on controls height */
+    width: 300px;
+    background: #1f2937;
+    border-left: 1px solid #374151;
+    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -4px 0 15px rgba(0, 0, 0, 0.3);
+  }
+
+  #project-meeting-chat-sidebar.open {
+    right: 0;
+  }
+
+  .chat-sidebar-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #374151;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #111827;
+    color: white;
+  }
+
+  .chat-sidebar-close {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+  }
+
+  .chat-sidebar-close:hover {
+    background: #374151;
+    color: white;
+  }
+
+  #project-meeting-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #project-meeting-chat-messages .chat-msg {
+    background: #374151;
+    padding: 8px 12px;
+    border-radius: 12px;
+    max-width: 85%;
+    word-wrap: break-word;
+    font-size: 14px;
+    line-height: 1.4;
+    color: white;
+  }
+
+  #project-meeting-chat-messages .chat-msg.self {
+    background: #2563eb;
+    border-bottom-right-radius: 2px;
+    align-self: flex-end;
+  }
+
+  #project-meeting-chat-messages .chat-msg:not(.self) {
+    border-bottom-left-radius: 2px;
+  }
+
+  #project-meeting-chat-messages .chat-msg-header {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  #project-meeting-chat-messages .chat-msg.self .chat-msg-header {
+    color: #dbeafe;
+    flex-direction: row-reverse;
+  }
+
+  .chat-input-area {
+    padding: 12px;
+    border-top: 1px solid #374151;
+    display: flex;
+    gap: 8px;
+    background: #111827;
+  }
+
+  .chat-input {
+    flex: 1;
+    background: #374151;
+    border: 1px solid #4b5563;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 20px;
+    outline: none;
+    font-size: 14px;
+    font-family: inherit;
+  }
+
+  .chat-input:focus {
+    border-color: #2563eb;
+  }
+
+  .chat-send-btn {
+    background: #2563eb;
+    color: white;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .chat-send-btn:hover {
+    background: #1d4ed8;
+  }
+
+  @media (max-width: 640px) {
+    #project-meeting-chat-sidebar {
+      width: 100%;
+      right: -100%;
+      top: 50px;
+      bottom: 70px;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -1881,6 +2249,17 @@
 
   <!-- RIGHT SIDEBAR: Chat Info, Files, Members -->
   <div id="right-sidebar" class="hidden">
+    <!-- Mobile Close Button -->
+    <button id="close-right-sidebar" class="mobile-only-btn"
+      onclick="document.getElementById('right-sidebar').classList.remove('active')"
+      style="position:absolute; top:12px; left:4px; z-index:20; background:none; border:none; color:var(--text); width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; display:none;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+    </button>
+
     <!-- Chat Info Section -->
     <div class="chat-info-section" id="chat-info-section">
       <div class="chat-info-avatar" id="chat-info-avatar">U</div>
@@ -1942,6 +2321,11 @@
     <div id="profile-last-seen" class="profile-last-seen"></div>
     <div class="profile-actions">
       <button id="profile-message" class="profile-btn">Message</button>
+      <form id="profile-logout-form" action="{% url 'logout' %}" method="post" style="display:none; margin-left:10px;">
+        {% csrf_token %}
+        <button type="submit" class="profile-btn"
+          style="background-color: #ef4444; border-color: #ef4444; color: white;">Logout</button>
+      </form>
     </div>
     <!-- Hidden File Input moved here -->
     <input type="file" id="avatar-input" accept="image/*" style="display: none;" />
@@ -2028,32 +2412,93 @@
 </div>
 
 <div id="call-overlay" class="compose-overlay hidden"
-  style="align-items:center; justify-content:center; background:rgba(0,0,0,0.6)">
-  <div class="compose-modal" style="width:720px; max-width:95vw; padding:0">
-    <div
-      style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid var(--border)">
-      <div id="call-title" style="font-weight:700">Call</div>
-      <div>
-        <button id="call-end-btn"
-          style="margin-left:6px;border:none;background:#ef4444;color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer">End</button>
+  style="align-items:center; justify-content:center; background: #000; z-index:10000; display:none;">
+  <div class="call-container"
+    style="position:relative; width:100%; height:100%; display:flex; flex-direction:column; overflow:hidden;">
+
+    <!-- VIDEO AREA -->
+    <div style="flex:1; position:relative; overflow:hidden; background:#111;">
+      <!-- REMOTE VIDEO (Full Size) -->
+      <video id="remote-video" autoplay playsinline
+        style="width:100%; height:100%; object-fit:cover; display:block;"></video>
+      <div id="remote-video-label"
+        style="position:absolute; bottom:20px; left:20px; z-index:10; color:white; background:rgba(0,0,0,0.6); padding:4px 8px; border-radius:4px; font-size:14px;">
+        Remote User</div>
+
+      <!-- LOCAL VIDEO (Picture in Picture) -->
+      <div id="local-video-wrapper"
+        style="position:absolute; bottom:20px; right:20px; width:160px; height:213px; border-radius:12px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.5); border:2px solid rgba(255,255,255,0.1); background:#222; z-index:20;">
+        <video id="local-video" autoplay playsinline muted
+          style="width:100%; height:100%; object-fit:cover; transform:scaleX(-1);"></video>
       </div>
     </div>
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; padding:10px">
-      <video id="local-video" autoplay playsinline muted
-        style="width:100%; height:320px; background:#111827; border-radius:8px"></video>
-      <video id="remote-video" autoplay playsinline
-        style="width:100%; height:320px; background:#111827; border-radius:8px"></video>
+
+    <!-- INCOMING CALL POPUP (Fullscreen Overlay) -->
+    <div id="incoming-call-ui"
+      style="position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); backdrop-filter:blur(10px); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:50;">
+      <div
+        style="width:96px; height:96px; background:#374151; border-radius:50%; margin-bottom:24px; display:flex; align-items:center; justify-content:center; border:2px solid rgba(255,255,255,0.1);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white"
+          stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+      </div>
+      <h2 id="call-title-text" style="color:white; font-size:24px; font-weight:600; margin-bottom:8px;">Incoming Call...
+      </h2>
+      <p id="call-subtitle-text" style="color:#9ca3af; margin-bottom:40px;">Video Call</p>
+
+      <div style="display:flex; gap:40px;">
+        <button id="call-reject-btn"
+          style="width:72px; height:72px; border-radius:50%; background:#ef4444; border:none; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform 0.2s;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path
+              d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91" />
+            <line x1="23" x2="1" y1="1" y2="23" />
+          </svg>
+        </button>
+        <button id="call-accept-btn"
+          style="width:72px; height:72px; border-radius:50%; background:#10b981; border:none; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform 0.2s; animation: pulse 2s infinite;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path
+              d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2z">
+            </path>
+          </svg>
+        </button>
+      </div>
     </div>
-    <div style="display:flex; align-items:center; gap:8px; padding:10px">
-      <button id="call-accept-btn"
-        style="border:none;background:#10b981;color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer;display:none">Accept</button>
-      <button id="call-reject-btn"
-        style="border:none;background:#ef4444;color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer;display:none">Reject</button>
-      <button id="toggle-mic-btn"
-        style="margin-left:auto;border:none;background:#e5e7eb;color:#111827;border-radius:6px;padding:6px 10px;cursor:pointer">Mic</button>
-      <button id="toggle-cam-btn"
-        style="border:none;background:#e5e7eb;color:#111827;border-radius:6px;padding:6px 10px;cursor:pointer">Cam</button>
+
+    <!-- CONTROLS Floating Bar -->
+    <div id="call-controls"
+      style="position:absolute; bottom:30px; left:50%; transform:translateX(-50%); display:flex; gap:16px; padding:12px 24px; background:rgba(31, 41, 55, 0.95); border-radius:50px; border:1px solid rgba(255,255,255,0.1); z-index:30; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+      <button id="toggle-mic-btn" class="meet-btn" title="Mute/Unmute">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+          <line x1="12" x2="12" y1="19" y2="23" />
+          <line x1="8" x2="16" y1="23" y2="23" />
+        </svg>
+      </button>
+      <button id="toggle-cam-btn" class="meet-btn" title="Camera">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 7 16 12 23 17 23 7" />
+          <rect width="15" height="14" x="1" y="5" rx="2" ry="2" />
+        </svg>
+      </button>
+      <button id="call-end-btn" class="meet-btn red-btn" title="End Call">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path
+            d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91" />
+          <line x1="23" x2="1" y1="1" y2="23" />
+        </svg>
+      </button>
     </div>
+
   </div>
 </div>
 
@@ -2080,37 +2525,61 @@
       <!-- Video tiles go here -->
     </div>
 
+    <!-- Chat Sidebar (Inside Overlay) -->
+    <div id="project-meeting-chat-sidebar">
+      <div class="chat-sidebar-header">
+        <h3 style="margin:0; font-size:16px; font-weight:600;">Meeting Chat</h3>
+        <button class="chat-sidebar-close" onclick="toggleProjectMeetingChat()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div id="project-meeting-chat-messages" class="chat-messages">
+        <div style="text-align:center; color:#6b7280; font-size:12px; margin-top:20px;">Welcome to team chat!</div>
+      </div>
+      <div class="chat-input-area">
+        <input type="text" id="project-meeting-chat-input" class="chat-input" placeholder="Type a message..."
+          onkeypress="handleProjectMeetingChatInput(event)">
+        <button class="chat-send-btn" onclick="sendProjectMeetingChat()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </div>
+
     <!-- Controls Footer -->
     <div class="meeting-controls-bar"
       style="padding:16px 24px; background:#1f2937; border-top:1px solid #374151; display:flex; justify-content:space-between; align-items:center; gap:16px">
-      <!-- Left: Device Settings -->
+
+      <!-- Left: Device Settings (Always Visible) -->
       <div style="display:flex; gap:10px">
-        <div class="btn-group">
-          <button id="meeting-cam-btn" class="meet-btn" title="Turn Camera On/Off">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M23 7 16 12 23 17 23 7" />
-              <rect width="15" height="14" x="1" y="5" rx="2" ry="2" />
-            </svg>
-          </button>
-          <button class="meet-btn-more">⌄</button>
-        </div>
-        <div class="btn-group">
-          <button id="meeting-mic-btn" class="meet-btn" title="Mute/Unmute">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" x2="12" y1="19" y2="23" />
-              <line x1="8" x2="16" y1="23" y2="23" />
-            </svg>
-          </button>
-          <button class="meet-btn-more">⌄</button>
-        </div>
+        <!-- Mic/Cam buttons kept simple -->
+        <button id="meeting-mic-btn" class="meet-btn" title="Mute/Unmute">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <line x1="12" x2="12" y1="19" y2="23" />
+            <line x1="8" x2="16" y1="23" y2="23" />
+          </svg>
+        </button>
+        <button id="meeting-cam-btn" class="meet-btn" title="Turn Camera On/Off">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 7 16 12 23 17 23 7" />
+            <rect width="15" height="14" x="1" y="5" rx="2" ry="2" />
+          </svg>
+        </button>
       </div>
 
-      <!-- Center: Actions -->
-      <div style="display:flex; gap:12px; position:relative">
+      <!-- Center: Desktop Actions (Hidden on Mobile) -->
+      <div id="desktop-controls" style="display:flex; gap:12px; position:relative">
         <button id="meeting-reaction-btn" class="meet-btn" title="Reactions">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2120,6 +2589,7 @@
             <line x1="15" x2="15.01" y1="9" y2="9" />
           </svg>
         </button>
+        <!-- Reactions Popup (Desktop) -->
         <div id="reactions-popup" class="hidden"
           style="position:absolute; bottom:60px; left:0; background:#374151; padding:8px; border-radius:8px; display:flex; gap:8px; box-shadow:0 4px 12px rgba(0,0,0,0.3); z-index:100">
           <button class="reaction-opt" onclick="sendMeetingReaction('👍')">👍</button>
@@ -2128,6 +2598,7 @@
           <button class="reaction-opt" onclick="sendMeetingReaction('😮')">😮</button>
           <button class="reaction-opt" onclick="sendMeetingReaction('👏')">👏</button>
         </div>
+
         <button id="meeting-hand-btn" class="meet-btn" title="Raise Hand">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2157,7 +2628,7 @@
             <line x1="23" x2="17" y1="11" y2="11" />
           </svg>
         </button>
-        <button class="meet-btn" title="Chat">
+        <button id="meeting-chat-btn" class="meet-btn" title="Chat" onclick="toggleProjectMeetingChat()">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -2165,9 +2636,57 @@
         </button>
       </div>
 
+      <!-- Mobile 'More' Button (Hidden on Desktop) -->
+      <div id="mobile-controls" style="display:none; position:relative;">
+        <button id="meeting-more-btn" class="meet-btn" title="More Options">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="1" />
+            <circle cx="12" cy="5" r="1" />
+            <circle cx="12" cy="19" r="1" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Mobile Context Menu (Popup) -->
+      <div id="meeting-mobile-menu" class="hidden"
+        style="position:absolute; bottom:80px; left:50%; transform:translateX(-50%); width:260px; background:#1f2937; border:1px solid #374151; border-radius:12px; padding:8px; box-shadow:0 10px 25px rgba(0,0,0,0.5); z-index:200; display:flex; flex-direction:column; gap:8px;">
+        <div style="font-size:12px; color:#9ca3af; padding:4px 8px; font-weight:600; text-transform:uppercase;">Meeting
+          Actions</div>
+
+        <button class="mobile-menu-item" onclick="toggleProjectMeetingChat(); closeMobileMenu()">
+          <span class="icon">💬</span> Chat
+        </button>
+        <button class="mobile-menu-item"
+          onclick="document.getElementById('meeting-hand-btn').click(); closeMobileMenu()">
+          <span class="icon">✋</span> Raise Hand
+        </button>
+        <button class="mobile-menu-item"
+          onclick="document.getElementById('meeting-invite-btn').click(); closeMobileMenu()">
+          <span class="icon">➕</span> Add People
+        </button>
+        <button class="mobile-menu-item"
+          onclick="document.getElementById('meeting-share-btn').click(); closeMobileMenu()">
+          <span class="icon">💻</span> Share Screen
+        </button>
+
+        <div style="border-top:1px solid #374151; margin:4px 0;"></div>
+
+        <div style="font-size:12px; color:#9ca3af; padding:4px 8px; font-weight:600; text-transform:uppercase;">
+          Reactions</div>
+        <div style="display:flex; justify-content:space-between; padding:4px 8px;">
+          <button class="reaction-opt" onclick="sendMeetingReaction('👍')">👍</button>
+          <button class="reaction-opt" onclick="sendMeetingReaction('❤️')">❤️</button>
+          <button class="reaction-opt" onclick="sendMeetingReaction('😂')">😂</button>
+          <button class="reaction-opt" onclick="sendMeetingReaction('😮')">😮</button>
+          <button class="reaction-opt" onclick="sendMeetingReaction('👏')">👏</button>
+        </div>
+      </div>
+
       <!-- Right: View & End -->
       <div style="display:flex; gap:12px; align-items:center">
-        <button class="meet-btn" title="Gallery View">
+        <!-- Gallery View (Hidden on Mobile) -->
+        <button class="meet-btn desktop-only-btn" title="Gallery View">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect width="7" height="7" x="3" y="3" rx="1" />

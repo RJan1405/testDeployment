@@ -266,5 +266,66 @@
         font-style: italic;
         color: #8a8886;
     }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    @media (max-width: 480px) {
+        .login-container {
+            padding: 10px;
+            align-items: flex-start;
+            padding-top: 20px;
+            padding-bottom: 20px;
+            height: auto;
+            /* Allow scrolling */
+        }
+
+        .login-box {
+            padding: 20px 15px;
+            width: 300px;
+            max-width: 100%;
+            margin-top: 70px;
+        }
+
+        .login-header {
+            margin-bottom: 15px;
+        }
+
+        .login-header h1 {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .login-form {
+            gap: 10px;
+        }
+
+        .name-row {
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .form-group input {
+            padding: 8px;
+            font-size: 14px;
+            /* Prevent zoom on iOS */
+        }
+
+        .form-group label {
+            font-size: 12px;
+            margin-bottom: 2px;
+        }
+
+        .login-btn {
+            padding: 10px;
+            margin-top: 5px;
+        }
+
+        .login-footer {
+            margin-top: 15px;
+            padding-top: 15px;
+        }
+    }
 </style>
 {% endblock %}
