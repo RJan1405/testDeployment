@@ -2326,6 +2326,13 @@ function handleWebSocketMessage(data) {
     messagesContainer.appendChild(pel);
     if (isUserNearBottom(messagesContainer)) scrollToBottom();
     observeElementForRead(pel);
+
+    // Also update Meeting Chat Sidebar if present
+    const meetingChatList = document.getElementById('project-meeting-chat-messages');
+    if (meetingChatList) {
+      appendProjectMeetingChatMessage(msg, meetingChatList);
+    }
+
     return;
   }
 
@@ -3944,7 +3951,7 @@ async function handleGroupCreate() {
       if (closeBtn) closeBtn.click();
 
       // Reload projects
-      loadProjects();
+      loadUnifiedChats();
       // Open new project
       openChat('project', project.id);
     } else {
@@ -4173,4 +4180,75 @@ function showToast(title, body) {
     toast.style.transition = 'all 0.3s';
     setTimeout(() => toast.remove(), 300);
   }, 4000);
+}
+
+/* ============================================================
+   PROJECT MEETING CHAT LOGIC
+   ============================================================ */
+
+function toggleProjectMeetingChat() {
+  const sidebar = document.getElementById('project-meeting-chat-sidebar');
+  const btn = document.getElementById('meeting-chat-btn');
+  if (sidebar) {
+    sidebar.classList.toggle('open');
+    if (btn) btn.classList.toggle('active', sidebar.classList.contains('open'));
+
+    if (sidebar.classList.contains('open')) {
+      const input = document.getElementById('project-meeting-chat-input');
+      if (input) setTimeout(() => input.focus(), 300);
+
+      // Optional: Scroll to bottom
+      const list = document.getElementById('project-meeting-chat-messages');
+      if (list) list.scrollTop = list.scrollHeight;
+    }
+  }
+}
+
+function handleProjectMeetingChatInput(e) {
+  if (e.key === 'Enter') {
+    sendProjectMeetingChat();
+  }
+}
+
+function sendProjectMeetingChat() {
+  const input = document.getElementById('project-meeting-chat-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    // Generate a temp ID for reconciliation if needed, though we rely on echo for sidebar
+    const tempId = 'temp_sidebar_' + Date.now();
+    ws.send(JSON.stringify({
+      type: 'message',
+      project_id: currentChatId,
+      text: text,
+      temp_id: tempId
+    }));
+  }
+
+  input.value = '';
+}
+
+function appendProjectMeetingChatMessage(msg, container) {
+  if (!container) return;
+
+  const isSelf = (Number(msg.sender_id) === Number(currentUserId));
+
+  const msgDiv = document.createElement('div');
+  msgDiv.className = `chat-msg ${isSelf ? 'self' : ''}`;
+
+  const header = document.createElement('div');
+  header.className = 'chat-msg-header';
+  const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  header.innerHTML = `<span>${isSelf ? 'You' : (msg.sender_username || 'User')}</span><span>${timeStr}</span>`;
+
+  const content = document.createElement('div');
+  content.textContent = msg.text;
+
+  msgDiv.appendChild(header);
+  msgDiv.appendChild(content);
+
+  container.appendChild(msgDiv);
+  container.scrollTop = container.scrollHeight;
 }

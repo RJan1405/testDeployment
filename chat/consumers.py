@@ -1,6 +1,7 @@
 # chat/consumers.py
 # Rewritten, cleaned and upgraded for OPTION A (PURE WEBSOCKET)
 import json
+from datetime import datetime
 import logging
 import base64
 from channels.generic.websocket import AsyncWebsocketConsumer
@@ -828,6 +829,34 @@ class MeetingConsumer(AsyncWebsocketConsumer):
                         'data': data.get('data')
                     }
                 )
+        elif message_type == 'raise_hand':
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'hand_event',
+                    'user_id': self.user.id,
+                    'is_raised': data.get('is_raised', False)
+                }
+            )
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'reaction_event',
+                    'user_id': self.user.id,
+                    'emoji': data.get('emoji')
+                }
+            )
+        elif message_type == 'chat_message':
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'meeting_chat_message',
+                    'sender_id': self.user.id,
+                    'username': self.user.username,
+                    'text': data.get('text'),
+                    'timestamp': datetime.now().strftime('%H:%M')
+                }
+            )
 
     # Handlers for group messages
     async def user_joined(self, event):
@@ -857,4 +886,27 @@ class MeetingConsumer(AsyncWebsocketConsumer):
             'type': 'signal',
             'sender_id': event['sender_id'],
             'data': event['data']
+        }))
+
+    async def hand_event(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'raise-hand',
+            'user_id': event['user_id'],
+            'is_raised': event['is_raised']
+        }))
+
+    async def reaction_event(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'reaction',
+            'user_id': event['user_id'],
+            'emoji': event['emoji']
+        }))
+
+    async def meeting_chat_message(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'chat-message',
+            'sender_id': event['sender_id'],
+            'username': event['username'],
+            'text': event['text'],
+            'timestamp': event['timestamp']
         }))

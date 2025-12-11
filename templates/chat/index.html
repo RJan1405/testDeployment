@@ -2009,6 +2009,147 @@
       /* Balance it slightly or just keep it simple */
     }
   }
+
+  /* PROJECT MEETING CHAT SIDEBAR */
+  #project-meeting-chat-sidebar {
+    position: absolute;
+    right: -320px;
+    top: 60px;
+    /* Adjust based on header height if needed */
+    bottom: 80px;
+    /* Adjust based on controls height */
+    width: 300px;
+    background: #1f2937;
+    border-left: 1px solid #374151;
+    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -4px 0 15px rgba(0, 0, 0, 0.3);
+  }
+
+  #project-meeting-chat-sidebar.open {
+    right: 0;
+  }
+
+  .chat-sidebar-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #374151;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #111827;
+    color: white;
+  }
+
+  .chat-sidebar-close {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+  }
+
+  .chat-sidebar-close:hover {
+    background: #374151;
+    color: white;
+  }
+
+  #project-meeting-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #project-meeting-chat-messages .chat-msg {
+    background: #374151;
+    padding: 8px 12px;
+    border-radius: 12px;
+    max-width: 85%;
+    word-wrap: break-word;
+    font-size: 14px;
+    line-height: 1.4;
+    color: white;
+  }
+
+  #project-meeting-chat-messages .chat-msg.self {
+    background: #2563eb;
+    border-bottom-right-radius: 2px;
+    align-self: flex-end;
+  }
+
+  #project-meeting-chat-messages .chat-msg:not(.self) {
+    border-bottom-left-radius: 2px;
+  }
+
+  #project-meeting-chat-messages .chat-msg-header {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  #project-meeting-chat-messages .chat-msg.self .chat-msg-header {
+    color: #dbeafe;
+    flex-direction: row-reverse;
+  }
+
+  .chat-input-area {
+    padding: 12px;
+    border-top: 1px solid #374151;
+    display: flex;
+    gap: 8px;
+    background: #111827;
+  }
+
+  .chat-input {
+    flex: 1;
+    background: #374151;
+    border: 1px solid #4b5563;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 20px;
+    outline: none;
+    font-size: 14px;
+    font-family: inherit;
+  }
+
+  .chat-input:focus {
+    border-color: #2563eb;
+  }
+
+  .chat-send-btn {
+    background: #2563eb;
+    color: white;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .chat-send-btn:hover {
+    background: #1d4ed8;
+  }
+
+  @media (max-width: 640px) {
+    #project-meeting-chat-sidebar {
+      width: 100%;
+      right: -100%;
+      top: 50px;
+      bottom: 70px;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -2384,6 +2525,34 @@
       <!-- Video tiles go here -->
     </div>
 
+    <!-- Chat Sidebar (Inside Overlay) -->
+    <div id="project-meeting-chat-sidebar">
+      <div class="chat-sidebar-header">
+        <h3 style="margin:0; font-size:16px; font-weight:600;">Meeting Chat</h3>
+        <button class="chat-sidebar-close" onclick="toggleProjectMeetingChat()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div id="project-meeting-chat-messages" class="chat-messages">
+        <div style="text-align:center; color:#6b7280; font-size:12px; margin-top:20px;">Welcome to team chat!</div>
+      </div>
+      <div class="chat-input-area">
+        <input type="text" id="project-meeting-chat-input" class="chat-input" placeholder="Type a message..."
+          onkeypress="handleProjectMeetingChatInput(event)">
+        <button class="chat-send-btn" onclick="sendProjectMeetingChat()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </div>
+
     <!-- Controls Footer -->
     <div class="meeting-controls-bar"
       style="padding:16px 24px; background:#1f2937; border-top:1px solid #374151; display:flex; justify-content:space-between; align-items:center; gap:16px">
@@ -2459,7 +2628,7 @@
             <line x1="23" x2="17" y1="11" y2="11" />
           </svg>
         </button>
-        <button class="meet-btn" title="Chat">
+        <button id="meeting-chat-btn" class="meet-btn" title="Chat" onclick="toggleProjectMeetingChat()">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -2485,6 +2654,9 @@
         <div style="font-size:12px; color:#9ca3af; padding:4px 8px; font-weight:600; text-transform:uppercase;">Meeting
           Actions</div>
 
+        <button class="mobile-menu-item" onclick="toggleProjectMeetingChat(); closeMobileMenu()">
+          <span class="icon">💬</span> Chat
+        </button>
         <button class="mobile-menu-item"
           onclick="document.getElementById('meeting-hand-btn').click(); closeMobileMenu()">
           <span class="icon">✋</span> Raise Hand
