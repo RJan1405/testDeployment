@@ -1,2 +1,12 @@
 HOW_TO_RUN.txt
 MEETING_FEATURE_EXPLANATION.txt
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.sqlite3
+db.sqlite3
+.DS_Store
